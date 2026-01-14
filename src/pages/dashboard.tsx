@@ -12,7 +12,7 @@ import {
 import { createPublicClient, http } from 'viem';
 import { baseSepolia } from 'viem/chains';
 import { EscrowService } from '../constants/escrowContract';
-import { BASE_USDC_ADDRESS, ZERO_DEV_PROJECT_ID, ZERODEV_PASSKEY_SERVER_URL } from '../constants/config';
+import { BASE_USDC_ADDRESS, ZERO_DEV_RPC_URL, ZERO_DEV_PASSKEY_SERVER_URL } from '../constants/config';
 import { LoginScreen } from './login';
 import { DepositModal } from './modals/deposit';
 import { WithdrawModal } from './modals/withdrawal';
@@ -68,7 +68,7 @@ export default function Dashboard() {
     const { provider } = useWeb3Auth();
 
     const publicClient = createPublicClient({
-        transport: http(ZERO_DEV_PROJECT_ID),
+        transport: http(ZERO_DEV_RPC_URL),
         chain: CHAIN,
     });
 
@@ -102,7 +102,7 @@ export default function Dashboard() {
             // Create a new passkey
             const webAuthnKey = await toWebAuthnKey({
                 passkeyName: userInfo.email,
-                passkeyServerUrl: ZERODEV_PASSKEY_SERVER_URL,
+                passkeyServerUrl: ZERO_DEV_PASSKEY_SERVER_URL,
                 mode: WebAuthnMode.Register,
                 passkeyServerHeaders: {}
             });
@@ -128,13 +128,13 @@ export default function Dashboard() {
             const client = createKernelAccountClient({
                 account,
                 chain: CHAIN,
-                bundlerTransport: http(ZERO_DEV_PROJECT_ID),
+                bundlerTransport: http(ZERO_DEV_RPC_URL),
                 client: publicClient,
                 paymaster: {
                     getPaymasterData: async (userOperation) => {
                         const zerodevPaymaster = createZeroDevPaymasterClient({
                             chain: CHAIN,
-                            transport: http(ZERO_DEV_PROJECT_ID),
+                            transport: http(ZERO_DEV_RPC_URL),
                         });
                         return zerodevPaymaster.sponsorUserOperation({
                             userOperation,
@@ -174,7 +174,7 @@ export default function Dashboard() {
             // Login with existing passkey
             const webAuthnKey = await toWebAuthnKey({
                 passkeyName: userInfo.email,
-                passkeyServerUrl: ZERODEV_PASSKEY_SERVER_URL,
+                passkeyServerUrl: ZERO_DEV_PASSKEY_SERVER_URL,
                 mode: WebAuthnMode.Login,
                 passkeyServerHeaders: {}
             });
@@ -200,13 +200,13 @@ export default function Dashboard() {
             const client = createKernelAccountClient({
                 account,
                 chain: CHAIN,
-                bundlerTransport: http(ZERO_DEV_PROJECT_ID),
+                bundlerTransport: http(ZERO_DEV_RPC_URL),
                 client: publicClient,
                 paymaster: {
                     getPaymasterData: async (userOperation) => {
                         const zerodevPaymaster = createZeroDevPaymasterClient({
                             chain: CHAIN,
-                            transport: http(ZERO_DEV_PROJECT_ID),
+                            transport: http(ZERO_DEV_RPC_URL),
                         });
                         return zerodevPaymaster.sponsorUserOperation({
                             userOperation,
