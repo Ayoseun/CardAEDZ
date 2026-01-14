@@ -1,5 +1,6 @@
 import  { useState, type ComponentType, type ReactNode } from 'react';
-import { Wallet, CreditCard, ArrowRightLeft, Globe, Download, Shield, Lock, CheckCircle, ChevronRight, Play, ArrowDown, DollarSign, Zap, WalletCards, LucideWallet, LucideWallet2, LogIn } from 'lucide-react';
+import { Wallet, CreditCard, ArrowRightLeft, Globe, Download, Shield, Lock,
+   CheckCircle, ChevronRight, Play, Zap, LogIn } from 'lucide-react';
 import {  useNavigate } from 'react-router-dom';
 
 type FeatureColor = 'indigo' | 'purple' | 'pink';
