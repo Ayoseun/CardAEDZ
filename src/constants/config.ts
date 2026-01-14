@@ -12,4 +12,3 @@ export const BASE_RPC_URL = import.meta.env.VITE_BASE_RPC_URL;
 export const ZERO_DEV_RPC_URL = import.meta.env.VITE_ZERO_DEV_RPC_URL;
 export const ZERO_DEV_PASSKEY_SERVER_URL = import.meta.env.VITE_ZERO_DEV_PASSKEY_SERVER_URL;
 export const BASE_POOL_ADDRESS = import.meta.env.VITE_BASE_POOL_ADDRESS;
-export const BASE_USDC_ADDRESS = import.meta.env.VITE_BASE_USDC_ADDRESS;

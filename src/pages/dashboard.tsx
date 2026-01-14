@@ -4,17 +4,17 @@ import {
     LogOut, Settings, Lock, Key
 } from 'lucide-react';
 import {
-  useWeb3AuthConnect,
-  useWeb3AuthDisconnect,
-  useWeb3AuthUser,
-  useWeb3Auth
+    useWeb3AuthConnect,
+    useWeb3AuthDisconnect,
+    useWeb3AuthUser,
+    useWeb3Auth
 } from "@web3auth/modal/react";
+import { useSolanaWallet } from '@web3auth/modal/react/solana'
 import { createPublicClient, http } from 'viem';
 import { baseSepolia } from 'viem/chains';
 import { EscrowService } from '../constants/escrowContract';
-import { BASE_USDC_ADDRESS, ZERO_DEV_RPC_URL, ZERO_DEV_PASSKEY_SERVER_URL } from '../constants/config';
+import {  ZERO_DEV_RPC_URL, ZERO_DEV_PASSKEY_SERVER_URL, MOCK_USDC_ADDRESS } from '../constants/config';
 import { LoginScreen } from './login';
-import { DepositModal } from './modals/deposit';
 import { WithdrawModal } from './modals/withdrawal';
 import { mockTransactions, type Transaction, type User } from '../utils/types';
 import { TransactionsTab } from './tab/transactions';
@@ -24,15 +24,16 @@ import { QuickAction } from '../components/quickAction';
 import { BalanceCard } from '../components/balanceCard';
 
 // ZeroDev imports for passkeys
-import { 
-  toPasskeyValidator, 
-  toWebAuthnKey, 
-  WebAuthnMode, 
-  PasskeyValidatorContractVersion 
+import {
+    toPasskeyValidator,
+    toWebAuthnKey,
+    WebAuthnMode,
+    PasskeyValidatorContractVersion
 } from "@zerodev/passkey-validator";
 import { createKernelAccount, createKernelAccountClient } from "@zerodev/sdk";
 import { KERNEL_V3_1, getEntryPoint } from "@zerodev/sdk/constants";
 import { createZeroDevPaymasterClient } from "@zerodev/sdk";
+import { TopUpModal } from './modals/topUpModal';
 
 // Configuration - Replace with your actual values
 
@@ -46,23 +47,26 @@ export default function Dashboard() {
     const [showBalance, setShowBalance] = useState(true);
     const [activeTab, setActiveTab] = useState('overview');
     const [transactions, setTransactions] = useState<Transaction[]>(mockTransactions);
-    const [showDepositModal, setShowDepositModal] = useState(false);
+    const [showFundWalletModal, setShowFundWalletModal] = useState(false);
+    const [showTopUpCardModal, setShowTopUpCardModal] = useState(false);
     const [showWithdrawModal, setShowWithdrawModal] = useState(false);
-     //@ts-ignore
+    //@ts-ignore
     const [showTopUpModal, setShowTopUpModal] = useState(false);
     //@ts-ignore
     const [cardBalance, setCardBalance] = useState(487.51);
+    //@ts-ignore
     const [escrowBalance, setEscrowBalance] = useState(0);
     const [walletBalance, setWalletBalance] = useState(1250.00);
     const [escrowService, setEscrowService] = useState<any>(null);
-    
+    //@ts-ignore
+    const { solanaWallet, connection } = useSolanaWallet()
     // ZeroDev states
     const [kernelAccount, setKernelAccount] = useState<any>(null);
     const [kernelClient, setKernelClient] = useState<any>(null);
     const [isCreatingPasskey, setIsCreatingPasskey] = useState(false);
     const [passkeyCreated, setPasskeyCreated] = useState(false);
 
-    const { connect, isConnected} = useWeb3AuthConnect();
+    const { connect, isConnected } = useWeb3AuthConnect();
     const { disconnect, } = useWeb3AuthDisconnect();
     const { userInfo } = useWeb3AuthUser();
     const { provider } = useWeb3Auth();
@@ -82,9 +86,9 @@ export default function Dashboard() {
                 walletAddress: kernelAccount?.address || '',
                 avatar: userInfo.profileImage || ''
             } as any);
-            
+
             // Check if user already has a passkey wallet
-            const hasPasskey = localStorage.getItem(`passkey_created_${userInfo.email}`);
+            const hasPasskey = localStorage.getItem(`passkey_created_${"userInfo.email"}`);
             if (hasPasskey === 'true') {
                 setPasskeyCreated(true);
                 // Auto-login with existing passkey
@@ -95,7 +99,8 @@ export default function Dashboard() {
 
     // Create passkey wallet after Web3Auth login
     const createPasskeyWallet = async () => {
-       // if (!userInfo?.email) return;
+        if (!isConnected) return;
+
         console.log("Creating passkey wallet...");
         setIsCreatingPasskey(true);
         try {
@@ -145,17 +150,17 @@ export default function Dashboard() {
 
             setKernelAccount(account);
             setKernelClient(client);
-            
+
             // Initialize escrow service with the new account
             const service = new EscrowService(provider!!);
             setEscrowService(service);
-            
+
             // Mark passkey as created
             localStorage.setItem(`passkey_created_${"userInfo.email"}`, 'true');
             setPasskeyCreated(true);
-            
+
             await loadBalances(service);
-            
+
             alert('Passkey wallet created successfully! Your wallet address: ' + account.address);
         } catch (error) {
             console.error("Failed to create passkey wallet:", error);
@@ -167,7 +172,7 @@ export default function Dashboard() {
 
     // Login with existing passkey
     const loginWithPasskey = async () => {
-        //if (!userInfo?.email) return;
+        if (!isConnected) return;
         console.log("Logging in with existing passkey...");
         setIsLoading(true);
         try {
@@ -217,11 +222,11 @@ export default function Dashboard() {
 
             setKernelAccount(account);
             setKernelClient(client);
-            
+
             // Initialize escrow service
             const service = new EscrowService(provider!!);
             setEscrowService(service);
-            
+
             await loadBalances(service);
         } catch (error) {
             console.error("Failed to login with passkey:", error);
@@ -233,12 +238,12 @@ export default function Dashboard() {
     const loadBalances = async (service?: any) => {
         const svc = service || escrowService;
         if (!svc) return;
-        
+
         try {
-            const tokenAddress = BASE_USDC_ADDRESS;
+            const tokenAddress = MOCK_USDC_ADDRESS;
             const balance = await svc.getEscrowBalance(tokenAddress);
             setEscrowBalance(parseFloat(balance));
-            
+
             const walletBal = await svc.getTokenBalance(tokenAddress);
             setWalletBalance(parseFloat(walletBal));
         } catch (error) {
@@ -288,7 +293,7 @@ export default function Dashboard() {
                             Secure your funds with a passkey - no seed phrases needed!
                         </p>
                     </div>
-                    
+
                     <div className="space-y-4 mb-6">
                         <div className="flex items-start space-x-3">
                             <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -301,7 +306,7 @@ export default function Dashboard() {
                                 <p className="text-sm text-gray-600">Use Face ID, Touch ID, or your device's security</p>
                             </div>
                         </div>
-                        
+
                         <div className="flex items-start space-x-3">
                             <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
                                 <svg className="w-4 h-4 text-green-600" fill="currentColor" viewBox="0 0 20 20">
@@ -313,7 +318,7 @@ export default function Dashboard() {
                                 <p className="text-sm text-gray-600">Your passkey is stored securely on your device</p>
                             </div>
                         </div>
-                        
+
                         <div className="flex items-start space-x-3">
                             <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
                                 <svg className="w-4 h-4 text-green-600" fill="currentColor" viewBox="0 0 20 20">
@@ -334,7 +339,7 @@ export default function Dashboard() {
                     >
                         {isCreatingPasskey ? 'Creating Wallet...' : 'Create Passkey Wallet'}
                     </button>
-                    
+
                     <button
                         onClick={handleLogout}
                         className="w-full mt-3 text-gray-600 font-medium py-2 hover:text-gray-900 transition-colors"
@@ -345,6 +350,7 @@ export default function Dashboard() {
             </div>
         );
     }
+
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50">
@@ -395,7 +401,10 @@ export default function Dashboard() {
                         icon={CreditCard}
                         color="indigo"
                         showBalance={showBalance}
-                        onToggleBalance={() => setShowBalance(!showBalance)}
+                        onToggleBalance={() => {
+                            loadBalances();
+                            setShowBalance(!showBalance)
+                        }}
                     />
                     <BalanceCard
                         title="Escrow Balance"
@@ -418,8 +427,11 @@ export default function Dashboard() {
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
                     <QuickAction
                         icon={ArrowDownLeft}
-                        label="Deposit"
-                        onClick={() => setShowDepositModal(true)}
+                        label="Fund Wallet"
+                        onClick={() => {
+                            console.log("Funding wallet...");
+                            setShowFundWalletModal(true)
+                        }}
                         color="green"
                     />
                     <QuickAction
@@ -428,6 +440,7 @@ export default function Dashboard() {
                         onClick={() => setShowWithdrawModal(true)}
                         color="red"
                     />
+
                     <QuickAction
                         icon={CreditCard}
                         label="Get Card"
@@ -467,25 +480,34 @@ export default function Dashboard() {
                         <TransactionsTab transactions={transactions} />
                     )}
                     {activeTab === 'card' && (
-                        <CardTab 
-                            cardBalance={cardBalance} 
+                        <CardTab
+                            cardBalance={cardBalance}
                             user={user}
-                            onTopUp={() => setShowTopUpModal(true)}
+                            onTopUp={() => setShowTopUpCardModal(true)}
+
                         />
                     )}
                 </div>
             </div>
 
-            {showDepositModal && kernelClient && (
-                <DepositModal
-                    onClose={() => setShowDepositModal(false)}
+            {showFundWalletModal && kernelClient && (
+                <TopUpModal
+                    onClose={() => setShowFundWalletModal(false)}
                     walletBalance={walletBalance}
-                    onDeposit={async (amount:any, network:any) => {
+                    mode="fund"
+                />
+            )}
+
+            {showTopUpCardModal && kernelClient && (
+                <TopUpModal
+                    onClose={() => setShowTopUpCardModal(false)}
+                    walletBalance={walletBalance}
+                    onDeposit={async (amount: any, network: any) => {
                         const txId = Date.now().toString();
                         setTransactions([
                             {
                                 id: txId,
-                                type: 'deposit',
+                                type: 'funding',
                                 amount: parseFloat(amount),
                                 from: 'Wallet',
                                 status: 'pending',
@@ -497,25 +519,26 @@ export default function Dashboard() {
 
                         try {
                             if (escrowService) {
-                                const tokenAddress = BASE_USDC_ADDRESS;
+                                const tokenAddress = MOCK_USDC_ADDRESS;
                                 const receipt = await escrowService.depositToEscrow(tokenAddress, amount);
-                                
-                                setTransactions(prev => 
-                                    prev.map(tx => tx.id === txId 
+
+                                setTransactions(prev =>
+                                    prev.map(tx => tx.id === txId
                                         ? { ...tx, status: 'completed', txHash: receipt.transactionHash }
                                         : tx
                                     )
                                 );
-                                
+
                                 await loadBalances();
                             }
                         } catch (error) {
                             console.error("Deposit failed:", error);
-                            setTransactions(prev => 
+                            setTransactions(prev =>
                                 prev.map(tx => tx.id === txId ? { ...tx, status: 'failed' } : tx)
                             );
                         }
                     }}
+
                 />
             )}
 
@@ -524,7 +547,7 @@ export default function Dashboard() {
                     onClose={() => setShowWithdrawModal(false)}
                     maxAmount={escrowBalance}
                     escrowService={escrowService}
-                    onWithdraw={async (amount:any) => {
+                    onWithdraw={async (amount: any) => {
                         const txId = Date.now().toString();
                         setTransactions([
                             {
@@ -541,21 +564,21 @@ export default function Dashboard() {
 
                         try {
                             if (escrowService) {
-                                const tokenAddress = BASE_USDC_ADDRESS;
+                                const tokenAddress = MOCK_USDC_ADDRESS;
                                 const receipt = await escrowService.initiateWithdrawal(tokenAddress, amount);
-                                
-                                setTransactions(prev => 
-                                    prev.map(tx => tx.id === txId 
+
+                                setTransactions(prev =>
+                                    prev.map(tx => tx.id === txId
                                         ? { ...tx, status: 'completed', txHash: receipt.transactionHash }
                                         : tx
                                     )
                                 );
-                                
+
                                 await loadBalances();
                             }
                         } catch (error) {
                             console.error("Withdrawal failed:", error);
-                            setTransactions(prev => 
+                            setTransactions(prev =>
                                 prev.map(tx => tx.id === txId ? { ...tx, status: 'failed' } : tx)
                             );
                         }

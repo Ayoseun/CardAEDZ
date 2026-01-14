@@ -2,7 +2,7 @@
 
 export type Transaction = {
     id: string;
-    type: 'spend' | 'deposit' | 'withdraw';
+    type: 'spend' | 'deposit' | 'withdraw'|'funding';
     amount: number;
     status: 'completed' | 'pending' | 'failed';
     date: string;

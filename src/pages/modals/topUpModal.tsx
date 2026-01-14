@@ -9,7 +9,7 @@ import {
     QrCode
 } from 'lucide-react';
 
-export function DepositModal({ 
+export function TopUpModal({ 
     onClose, 
     walletBalance, 
     onDeposit, 
@@ -26,7 +26,7 @@ export function DepositModal({
     const isFundMode = mode === 'fund';
 
     // Get wallet addresses
-    const evmAddress = kernelAccount?.address || '0x...';
+    const evmAddress = kernelAccount?.address;
     const solanaAddress = 'Sol...'; // This would come from Web3Auth Solana provider
 
     const handleDeposit = async () => {
