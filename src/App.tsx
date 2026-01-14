@@ -1,11 +1,21 @@
-import React from 'react'
+
+import { BrowserRouter as Router, Routes, Route, } from 'react-router-dom';
+import LandingPage from './pages/home';
+import Dashboard from './pages/dashboard';
 
 export default function App() {
+
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-green-500 text-white">
-      <h1 className="text-2xl font-thin text-white">
-        Vite + Tailwind 🚀
-      </h1>
-    </div>
-  )
+    <Router> {/* Wrap your entire app with Router */}
+      <>
+        <Routes> {/* Define your routes here */}
+          <Route path="/" element={<LandingPage/>} />
+          <Route path="/dashboard" element={<Dashboard />} />
+
+        </Routes>
+      </>
+    </Router>
+
+  );
 }
