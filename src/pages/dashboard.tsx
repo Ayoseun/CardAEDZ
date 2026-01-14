@@ -12,7 +12,7 @@ import {
 import { createPublicClient, http } from 'viem';
 import { baseSepolia } from 'viem/chains';
 import { EscrowService } from '../constants/escrowContract';
-import { BASE_USDC_ADDRESS } from '../constants/config';
+import { BASE_USDC_ADDRESS, ZERO_DEV_PROJECT_ID, ZERODEV_PASSKEY_SERVER_URL } from '../constants/config';
 import { LoginScreen } from './login';
 import { DepositModal } from './modals/deposit';
 import { WithdrawModal } from './modals/withdrawal';
@@ -35,8 +35,7 @@ import { KERNEL_V3_1, getEntryPoint } from "@zerodev/sdk/constants";
 import { createZeroDevPaymasterClient } from "@zerodev/sdk";
 
 // Configuration - Replace with your actual values
-const ZERODEV_RPC = "https://rpc.zerodev.app/api/v2/bundler/YOUR_PROJECT_ID";
-const PASSKEY_SERVER_URL = "https://passkeys.zerodev.app/api/v3/YOUR_PROJECT_ID";
+
 const CHAIN = baseSepolia;
 const entryPoint = getEntryPoint("0.7");
 
@@ -49,7 +48,10 @@ export default function Dashboard() {
     const [transactions, setTransactions] = useState<Transaction[]>(mockTransactions);
     const [showDepositModal, setShowDepositModal] = useState(false);
     const [showWithdrawModal, setShowWithdrawModal] = useState(false);
-    const [cardBalance] = useState(487.51);
+     //@ts-ignore
+    const [showTopUpModal, setShowTopUpModal] = useState(false);
+    //@ts-ignore
+    const [cardBalance, setCardBalance] = useState(487.51);
     const [escrowBalance, setEscrowBalance] = useState(0);
     const [walletBalance, setWalletBalance] = useState(1250.00);
     const [escrowService, setEscrowService] = useState<any>(null);
@@ -60,13 +62,13 @@ export default function Dashboard() {
     const [isCreatingPasskey, setIsCreatingPasskey] = useState(false);
     const [passkeyCreated, setPasskeyCreated] = useState(false);
 
-    const { connect, isConnected, } = useWeb3AuthConnect();
-    const { disconnect } = useWeb3AuthDisconnect();
+    const { connect, isConnected} = useWeb3AuthConnect();
+    const { disconnect, } = useWeb3AuthDisconnect();
     const { userInfo } = useWeb3AuthUser();
     const { provider } = useWeb3Auth();
 
     const publicClient = createPublicClient({
-        transport: http(ZERODEV_RPC),
+        transport: http(ZERO_DEV_PROJECT_ID),
         chain: CHAIN,
     });
 
@@ -100,7 +102,7 @@ export default function Dashboard() {
             // Create a new passkey
             const webAuthnKey = await toWebAuthnKey({
                 passkeyName: userInfo.email,
-                passkeyServerUrl: PASSKEY_SERVER_URL,
+                passkeyServerUrl: ZERODEV_PASSKEY_SERVER_URL,
                 mode: WebAuthnMode.Register,
                 passkeyServerHeaders: {}
             });
@@ -123,16 +125,16 @@ export default function Dashboard() {
             });
 
             // Create Kernel client with paymaster for gasless transactions
-            const client:any = createKernelAccountClient({
+            const client = createKernelAccountClient({
                 account,
                 chain: CHAIN,
-                bundlerTransport: http(ZERODEV_RPC),
+                bundlerTransport: http(ZERO_DEV_PROJECT_ID),
                 client: publicClient,
                 paymaster: {
                     getPaymasterData: async (userOperation) => {
                         const zerodevPaymaster = createZeroDevPaymasterClient({
                             chain: CHAIN,
-                            transport: http(ZERODEV_RPC),
+                            transport: http(ZERO_DEV_PROJECT_ID),
                         });
                         return zerodevPaymaster.sponsorUserOperation({
                             userOperation,
@@ -145,7 +147,7 @@ export default function Dashboard() {
             setKernelClient(client);
             
             // Initialize escrow service with the new account
-            const service = new EscrowService(client);
+            const service = new EscrowService(provider!!);
             setEscrowService(service);
             
             // Mark passkey as created
@@ -172,7 +174,7 @@ export default function Dashboard() {
             // Login with existing passkey
             const webAuthnKey = await toWebAuthnKey({
                 passkeyName: userInfo.email,
-                passkeyServerUrl: PASSKEY_SERVER_URL,
+                passkeyServerUrl: ZERODEV_PASSKEY_SERVER_URL,
                 mode: WebAuthnMode.Login,
                 passkeyServerHeaders: {}
             });
@@ -198,13 +200,13 @@ export default function Dashboard() {
             const client = createKernelAccountClient({
                 account,
                 chain: CHAIN,
-                bundlerTransport: http(ZERODEV_RPC),
+                bundlerTransport: http(ZERO_DEV_PROJECT_ID),
                 client: publicClient,
                 paymaster: {
                     getPaymasterData: async (userOperation) => {
                         const zerodevPaymaster = createZeroDevPaymasterClient({
                             chain: CHAIN,
-                            transport: http(ZERODEV_RPC),
+                            transport: http(ZERO_DEV_PROJECT_ID),
                         });
                         return zerodevPaymaster.sponsorUserOperation({
                             userOperation,
@@ -217,7 +219,7 @@ export default function Dashboard() {
             setKernelClient(client);
             
             // Initialize escrow service
-            const service = new EscrowService(provider!);
+            const service = new EscrowService(provider!!);
             setEscrowService(service);
             
             await loadBalances(service);
@@ -465,7 +467,11 @@ export default function Dashboard() {
                         <TransactionsTab transactions={transactions} />
                     )}
                     {activeTab === 'card' && (
-                        <CardTab cardBalance={cardBalance} user={user} />
+                        <CardTab 
+                            cardBalance={cardBalance} 
+                            user={user}
+                            onTopUp={() => setShowTopUpModal(true)}
+                        />
                     )}
                 </div>
             </div>

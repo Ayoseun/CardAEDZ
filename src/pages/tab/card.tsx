@@ -1,15 +1,13 @@
-import  { useState} from 'react';
+import { useState } from 'react';
 import {
     Wallet, CreditCard, Copy,
     Check, 
-
     Loader,
     Plus,
+    ArrowDownLeft
 } from 'lucide-react';
 
-
-
-export function CardTab({ cardBalance, user }: any) {
+export function CardTab({ cardBalance, user, onTopUp }: any) {
     const [copied, setCopied] = useState(false);
     const [issuing, setIssuing] = useState(false);
     const [cardIssued, setCardIssued] = useState(false);
@@ -107,6 +105,58 @@ export function CardTab({ cardBalance, user }: any) {
                     )}
                 </div>
             </div>
+
+            {cardIssued && (
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Card Actions</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <button
+                            onClick={onTopUp}
+                            className="flex items-center justify-center space-x-2 px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-lg hover:from-green-700 hover:to-emerald-700 transition-all font-semibold shadow-md"
+                        >
+                            <ArrowDownLeft className="w-5 h-5" />
+                            <span>Top Up Card</span>
+                        </button>
+                        <button
+                            className="flex items-center justify-center space-x-2 px-6 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-all font-semibold"
+                        >
+                            <CreditCard className="w-5 h-5" />
+                            <span>Freeze Card</span>
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {cardIssued && (
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Card Transactions</h3>
+                    <div className="space-y-3">
+                        {[
+                            { merchant: 'Amazon', amount: 45.99, date: '2 hours ago', status: 'completed' },
+                            { merchant: 'Uber', amount: 12.50, date: 'Yesterday', status: 'completed' },
+                            { merchant: 'Netflix', amount: 15.99, date: '3 days ago', status: 'completed' },
+                        ].map((tx, idx) => (
+                            <div key={idx} className="flex items-center justify-between py-3 border-b last:border-0">
+                                <div className="flex items-center space-x-3">
+                                    <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center">
+                                        <CreditCard className="w-5 h-5 text-indigo-600" />
+                                    </div>
+                                    <div>
+                                        <p className="font-medium text-gray-900">{tx.merchant}</p>
+                                        <p className="text-sm text-gray-500">{tx.date}</p>
+                                    </div>
+                                </div>
+                                <div className="text-right">
+                                    <p className="font-semibold text-gray-900">-${tx.amount}</p>
+                                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+                                        {tx.status}
+                                    </span>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
