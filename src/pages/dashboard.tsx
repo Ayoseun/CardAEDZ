@@ -151,7 +151,7 @@ export default function Dashboard() {
             setEscrowService(service);
             
             // Mark passkey as created
-            localStorage.setItem(`passkey_created_${userInfo.email}`, 'true');
+            localStorage.setItem(`passkey_created_${"userInfo.email"}`, 'true');
             setPasskeyCreated(true);
             
             await loadBalances(service);
