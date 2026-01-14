@@ -69,7 +69,7 @@ export default function Dashboard() {
     const { connect, isConnected } = useWeb3AuthConnect();
     const { disconnect, } = useWeb3AuthDisconnect();
     const { userInfo } = useWeb3AuthUser();
-    const { provider } = useWeb3Auth();
+  
 
     const publicClient = createPublicClient({
         transport: http(ZERO_DEV_RPC_URL),
