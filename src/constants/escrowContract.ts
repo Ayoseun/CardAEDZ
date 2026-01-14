@@ -1,109 +1,208 @@
-// src/utils/escrowContract.ts
-import { ethers } from "ethers";
-import type { IProvider } from "@web3auth/modal";
-import { BASE_POOL_ADDRESS, MOCK_USDC_ADDRESS,  } from "./config";
+// src/constants/escrowContract.ts
+import { createPublicClient, http, parseUnits, formatUnits, type Address } from 'viem';
+import { baseSepolia } from 'viem/chains';
+import { BASE_POOL_ADDRESS, BASE_RPC_URL, MOCK_USDC_ADDRESS } from './config';
 
-// Contract ABI - only the functions we need
+// Contract ABIs
 const ESCROW_ABI = [
-    "function deposit(address token, uint256 amount) external",
-    "function initiateWithdrawal(address token, uint256 amount) external",
-    "function withdraw(address token, uint256 amount) external",
-    "function balances(address user, address token) external view returns (uint256)",
-    "function withdrawTimelocks(address user, address token) external view returns (uint256)",
-    "function createEscrow(address partyB, address token, uint256 amount, uint256 timelockDuration, uint256 releasePercentagePerSpend) external returns (uint256)",
-    "function getEscrow(uint256 escrowId) external view returns (tuple(address partyA, address partyB, address token, uint256 totalAmount, uint256 releasedAmount, uint256 depositTime, uint256 timelockDuration, uint256 releasePercentagePerSpend, bool isActive))",
-    "function reportSpend(uint256 escrowId, uint256 spentAmount) external",
-    "function verifyAndRelease(uint256 escrowId, uint256 proofIndex) external",
-];
+    {
+        name: 'deposit',
+        type: 'function',
+        stateMutability: 'nonpayable',
+        inputs: [
+            { name: 'token', type: 'address' },
+            { name: 'amount', type: 'uint256' }
+        ],
+        outputs: []
+    },
+    {
+        name: 'initiateWithdrawal',
+        type: 'function',
+        stateMutability: 'nonpayable',
+        inputs: [
+            { name: 'token', type: 'address' },
+            { name: 'amount', type: 'uint256' }
+        ],
+        outputs: []
+    },
+    {
+        name: 'withdraw',
+        type: 'function',
+        stateMutability: 'nonpayable',
+        inputs: [
+            { name: 'token', type: 'address' },
+            { name: 'amount', type: 'uint256' }
+        ],
+        outputs: []
+    },
+    {
+        name: 'balances',
+        type: 'function',
+        stateMutability: 'view',
+        inputs: [
+            { name: 'user', type: 'address' },
+            { name: 'token', type: 'address' }
+        ],
+        outputs: [{ name: '', type: 'uint256' }]
+    },
+    {
+        name: 'withdrawTimelocks',
+        type: 'function',
+        stateMutability: 'view',
+        inputs: [
+            { name: 'user', type: 'address' },
+            { name: 'token', type: 'address' }
+        ],
+        outputs: [{ name: '', type: 'uint256' }]
+    }
+] as const;
 
-// ERC20 ABI - for token approvals
 const ERC20_ABI = [
-    "function approve(address spender, uint256 amount) external returns (bool)",
-    "function allowance(address owner, address spender) external view returns (uint256)",
-    "function balanceOf(address account) external view returns (uint256)",
-    "function decimals() external view returns (uint8)",
-];
+    {
+        name: 'approve',
+        type: 'function',
+        stateMutability: 'nonpayable',
+        inputs: [
+            { name: 'spender', type: 'address' },
+            { name: 'amount', type: 'uint256' }
+        ],
+        outputs: [{ name: '', type: 'bool' }]
+    },
+    {
+        name: 'allowance',
+        type: 'function',
+        stateMutability: 'view',
+        inputs: [
+            { name: 'owner', type: 'address' },
+            { name: 'spender', type: 'address' }
+        ],
+        outputs: [{ name: '', type: 'uint256' }]
+    },
+    {
+        name: 'balanceOf',
+        type: 'function',
+        stateMutability: 'view',
+        inputs: [{ name: 'account', type: 'address' }],
+        outputs: [{ name: '', type: 'uint256' }]
+    },
+    {
+        name: 'decimals',
+        type: 'function',
+        stateMutability: 'view',
+        inputs: [],
+        outputs: [{ name: '', type: 'uint8' }]
+    }
+] as const;
 
-// Contract addresses (update these with your deployed addresses)
 export const CONTRACTS = {
-    // Base Sepolia testnet addresses
-    escrow: BASE_POOL_ADDRESS, // Deploy and update
-    usdc: MOCK_USDC_ADDRESS, // Base Sepolia USDC
+    escrow: BASE_POOL_ADDRESS as Address,
+    usdc: MOCK_USDC_ADDRESS as Address,
 };
 
 export class EscrowService {
-    private provider: ethers.providers.Web3Provider;
-    private signer: ethers.Signer;
-    private escrowContract: ethers.Contract;
+    private kernelClient: any;
+    private publicClient: any;
+    private address: any;
 
-    private readProvider?: ethers.providers.JsonRpcProvider;
-
-    constructor(web3AuthProvider: IProvider) {
-        this.provider = new ethers.providers.Web3Provider(web3AuthProvider);
-        this.signer = this.provider.getSigner();
-        this.escrowContract = new ethers.Contract(
-            CONTRACTS.escrow,
-            ESCROW_ABI,
-            this.signer
-        );
-        this.readProvider = new ethers.providers.JsonRpcProvider(
-            "https://sepolia.base.org"
-        );
-
+    constructor(kernelClient: any, userAddress: any) {
+        this.kernelClient = kernelClient;
+        this.address = userAddress;
+        this.publicClient = createPublicClient({
+            chain: baseSepolia,
+            transport: http(BASE_RPC_URL)
+        });
     }
 
     /**
      * Get user's balance in the escrow contract
      */
-    async getEscrowBalance(tokenAddress: string): Promise<string> {
+    async getEscrowBalance(tokenAddress: Address): Promise<string> {
         try {
-            const userAddress = await this.signer.getAddress();
-            const balance = await this.escrowContract.balances(userAddress, tokenAddress);
-            const tokenContract = new ethers.Contract(tokenAddress, ERC20_ABI, this.readProvider);
-            const decimals = await tokenContract.decimals();
-            return ethers.utils.formatUnits(balance, decimals);
+            const userAddress = this.address;
+            
+            const balance = await this.publicClient.readContract({
+                address: CONTRACTS.escrow,
+                abi: ESCROW_ABI,
+                functionName: 'balances',
+                args: [userAddress, tokenAddress]
+            });
+
+            const decimals = await this.publicClient.readContract({
+                address: tokenAddress,
+                abi: ERC20_ABI,
+                functionName: 'decimals'
+            });
+
+            return formatUnits(balance, decimals);
         } catch (error) {
             console.error("Error getting escrow balance:", error);
-            throw error;
+            return "0.00";
         }
     }
 
     /**
      * Get user's token balance in wallet
      */
-    async getTokenBalance(tokenAddress: string): Promise<string> {
+    async getTokenBalance(tokenAddress: Address): Promise<string> {
         try {
-            const userAddress = await this.signer.getAddress();
-            const tokenContract = new ethers.Contract(tokenAddress, ERC20_ABI, this.readProvider);
-            const balance = await tokenContract.balanceOf(userAddress);
-            const decimals = await tokenContract.decimals();
-            return ethers.utils.formatUnits(balance, decimals);
+             const userAddress = this.address;
+
+            const balance = await this.publicClient.readContract({
+                address: tokenAddress,
+                abi: ERC20_ABI,
+                functionName: 'balanceOf',
+                args: [userAddress]
+            });
+
+            const decimals = await this.publicClient.readContract({
+                address: tokenAddress,
+                abi: ERC20_ABI,
+                functionName: 'decimals'
+            });
+
+            return formatUnits(balance, decimals);
         } catch (error) {
             console.error("Error getting token balance:", error);
-            throw error;
+            return "0.00";
         }
     }
 
     /**
      * Approve token spending for escrow contract
      */
-    async approveToken(tokenAddress: string, amount: string): Promise<ethers.ContractReceipt> {
+    async approveToken(tokenAddress: Address, amount: string): Promise<any> {
         try {
-            const tokenContract = new ethers.Contract(tokenAddress, ERC20_ABI, this.signer);
-            const decimals = await tokenContract.decimals();
-            const amountInWei = ethers.utils.parseUnits(amount, decimals);
+            const decimals = await this.publicClient.readContract({
+                address: tokenAddress,
+                abi: ERC20_ABI,
+                functionName: 'decimals'
+            });
+
+            const amountInWei = parseUnits(amount, decimals);
+             const userAddress = this.address;
 
             // Check current allowance
-            const userAddress = await this.signer.getAddress();
-            const currentAllowance = await tokenContract.allowance(userAddress, CONTRACTS.escrow);
+            const currentAllowance = await this.publicClient.readContract({
+                address: tokenAddress,
+                abi: ERC20_ABI,
+                functionName: 'allowance',
+                args: [userAddress, CONTRACTS.escrow]
+            });
 
-            if (currentAllowance.gte(amountInWei)) {
+            if (currentAllowance >= amountInWei) {
                 console.log("Sufficient allowance already exists");
-                return { status: 1 } as ethers.ContractReceipt;
+                return { status: 'success' };
             }
 
-            const tx = await tokenContract.approve(CONTRACTS.escrow, amountInWei);
-            const receipt = await tx.wait();
+            // Approve using kernel client
+            const hash = await this.kernelClient.writeContract({
+                address: tokenAddress,
+                abi: ERC20_ABI,
+                functionName: 'approve',
+                args: [CONTRACTS.escrow, amountInWei]
+            });
+
+            const receipt = await this.publicClient.waitForTransactionReceipt({ hash });
             return receipt;
         } catch (error) {
             console.error("Error approving token:", error);
@@ -114,21 +213,28 @@ export class EscrowService {
     /**
      * Deposit tokens into escrow
      */
-    async depositToEscrow(
-        tokenAddress: string,
-        amount: string
-    ): Promise<ethers.ContractReceipt> {
+    async depositToEscrow(tokenAddress: Address, amount: string): Promise<any> {
         try {
-            const tokenContract = new ethers.Contract(tokenAddress, ERC20_ABI, this.signer);
-            const decimals = await tokenContract.decimals();
-            const amountInWei = ethers.utils.parseUnits(amount, decimals);
+            const decimals = await this.publicClient.readContract({
+                address: tokenAddress,
+                abi: ERC20_ABI,
+                functionName: 'decimals'
+            });
+
+            const amountInWei = parseUnits(amount, decimals);
 
             // First approve if needed
             await this.approveToken(tokenAddress, amount);
 
-            // Then deposit
-            const tx = await this.escrowContract.deposit(tokenAddress, amountInWei);
-            const receipt = await tx.wait();
+            // Then deposit using kernel client
+            const hash = await this.kernelClient.writeContract({
+                address: CONTRACTS.escrow,
+                abi: ESCROW_ABI,
+                functionName: 'deposit',
+                args: [tokenAddress, amountInWei]
+            });
+
+            const receipt = await this.publicClient.waitForTransactionReceipt({ hash });
             return receipt;
         } catch (error) {
             console.error("Error depositing to escrow:", error);
@@ -139,17 +245,24 @@ export class EscrowService {
     /**
      * Initiate withdrawal (starts timelock)
      */
-    async initiateWithdrawal(
-        tokenAddress: string,
-        amount: string
-    ): Promise<ethers.ContractReceipt> {
+    async initiateWithdrawal(tokenAddress: Address, amount: string): Promise<any> {
         try {
-            const tokenContract = new ethers.Contract(tokenAddress, ERC20_ABI, this.provider);
-            const decimals = await tokenContract.decimals();
-            const amountInWei = ethers.utils.parseUnits(amount, decimals);
+            const decimals = await this.publicClient.readContract({
+                address: tokenAddress,
+                abi: ERC20_ABI,
+                functionName: 'decimals'
+            });
 
-            const tx = await this.escrowContract.initiateWithdrawal(tokenAddress, amountInWei);
-            const receipt = await tx.wait();
+            const amountInWei = parseUnits(amount, decimals);
+
+            const hash = await this.kernelClient.writeContract({
+                address: CONTRACTS.escrow,
+                abi: ESCROW_ABI,
+                functionName: 'initiateWithdrawal',
+                args: [tokenAddress, amountInWei]
+            });
+
+            const receipt = await this.publicClient.waitForTransactionReceipt({ hash });
             return receipt;
         } catch (error) {
             console.error("Error initiating withdrawal:", error);
@@ -160,17 +273,24 @@ export class EscrowService {
     /**
      * Complete withdrawal after timelock
      */
-    async completeWithdrawal(
-        tokenAddress: string,
-        amount: string
-    ): Promise<ethers.ContractReceipt> {
+    async completeWithdrawal(tokenAddress: Address, amount: string): Promise<any> {
         try {
-            const tokenContract = new ethers.Contract(tokenAddress, ERC20_ABI, this.provider);
-            const decimals = await tokenContract.decimals();
-            const amountInWei = ethers.utils.parseUnits(amount, decimals);
+            const decimals = await this.publicClient.readContract({
+                address: tokenAddress,
+                abi: ERC20_ABI,
+                functionName: 'decimals'
+            });
 
-            const tx = await this.escrowContract.withdraw(tokenAddress, amountInWei);
-            const receipt = await tx.wait();
+            const amountInWei = parseUnits(amount, decimals);
+
+            const hash = await this.kernelClient.writeContract({
+                address: CONTRACTS.escrow,
+                abi: ESCROW_ABI,
+                functionName: 'withdraw',
+                args: [tokenAddress, amountInWei]
+            });
+
+            const receipt = await this.publicClient.waitForTransactionReceipt({ hash });
             return receipt;
         } catch (error) {
             console.error("Error completing withdrawal:", error);
@@ -181,16 +301,23 @@ export class EscrowService {
     /**
      * Check withdrawal timelock status
      */
-    async getWithdrawalTimelock(tokenAddress: string): Promise<{
+    async getWithdrawalTimelock(tokenAddress: Address): Promise<{
         unlockTime: number;
         isLocked: boolean;
         remainingTime: number;
     }> {
         try {
-            const userAddress = await this.signer.getAddress();
-            const unlockTime = await this.escrowContract.withdrawTimelocks(userAddress, tokenAddress);
+             const userAddress = this.address;
+
+            const unlockTime = await this.publicClient.readContract({
+                address: CONTRACTS.escrow,
+                abi: ESCROW_ABI,
+                functionName: 'withdrawTimelocks',
+                args: [userAddress, tokenAddress]
+            });
+
             const currentTime = Math.floor(Date.now() / 1000);
-            const unlockTimeNumber = unlockTime.toNumber();
+            const unlockTimeNumber = Number(unlockTime);
 
             return {
                 unlockTime: unlockTimeNumber,
@@ -199,103 +326,6 @@ export class EscrowService {
             };
         } catch (error) {
             console.error("Error getting withdrawal timelock:", error);
-            throw error;
-        }
-    }
-
-    /**
-     * Create a new escrow agreement
-     */
-    async createEscrow(
-        partyB: string,
-        tokenAddress: string,
-        amount: string,
-        timelockDuration: number, // in seconds
-        releasePercentagePerSpend: number // in basis points (100 = 1%)
-    ): Promise<{ receipt: ethers.ContractReceipt; escrowId: number }> {
-        try {
-            const tokenContract = new ethers.Contract(tokenAddress, ERC20_ABI, this.signer);
-            const decimals = await tokenContract.decimals();
-            const amountInWei = ethers.utils.parseUnits(amount, decimals);
-
-            // Approve first
-            await this.approveToken(tokenAddress, amount);
-
-            // Create escrow
-            const tx = await this.escrowContract.createEscrow(
-                partyB,
-                tokenAddress,
-                amountInWei,
-                timelockDuration,
-                releasePercentagePerSpend
-            );
-            const receipt = await tx.wait();
-
-            // Extract escrowId from event
-            const event = receipt.events?.find((e: any) => e.event === "EscrowCreated");
-            const escrowId = event?.args?.escrowId.toNumber();
-
-            return { receipt, escrowId };
-        } catch (error) {
-            console.error("Error creating escrow:", error);
-            throw error;
-        }
-    }
-
-    /**
-     * Get escrow details
-     */
-    async getEscrowDetails(escrowId: number) {
-        try {
-            const escrow = await this.escrowContract.getEscrow(escrowId);
-            const tokenContract = new ethers.Contract(escrow.token, ERC20_ABI, this.provider);
-            const decimals = await tokenContract.decimals();
-
-            return {
-                partyA: escrow.partyA,
-                partyB: escrow.partyB,
-                token: escrow.token,
-                totalAmount: ethers.utils.formatUnits(escrow.totalAmount, decimals),
-                releasedAmount: ethers.utils.formatUnits(escrow.releasedAmount, decimals),
-                depositTime: new Date(escrow.depositTime.toNumber() * 1000),
-                timelockDuration: escrow.timelockDuration.toNumber(),
-                releasePercentagePerSpend: escrow.releasePercentagePerSpend.toNumber(),
-                isActive: escrow.isActive,
-            };
-        } catch (error) {
-            console.error("Error getting escrow details:", error);
-            throw error;
-        }
-    }
-
-    /**
-     * Report spending (for partyB)
-     */
-    async reportSpend(escrowId: number, spentAmount: string, tokenAddress: string): Promise<ethers.ContractReceipt> {
-        try {
-            const tokenContract = new ethers.Contract(tokenAddress, ERC20_ABI, this.provider);
-            const decimals = await tokenContract.decimals();
-            const amountInWei = ethers.utils.parseUnits(spentAmount, decimals);
-
-            const tx = await this.escrowContract.reportSpend(escrowId, amountInWei);
-            const receipt = await tx.wait();
-            return receipt;
-        } catch (error) {
-            console.error("Error reporting spend:", error);
-            throw error;
-        }
-    }
-
-    /**
-     * Verify and release funds (for partyA)
-     */
-    async verifyAndRelease(escrowId: number, proofIndex: number): Promise<ethers.ContractReceipt> {
-        try {
-            const tx = await this.escrowContract.verifyAndRelease(escrowId, proofIndex);
-            const receipt = await tx.wait();
-            return receipt;
-        } catch (error) {
-            console.error("Error verifying and releasing:", error);
             throw error;
         }
     }

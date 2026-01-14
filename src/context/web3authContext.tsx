@@ -5,7 +5,7 @@ import {
   MFA_LEVELS,
   type Web3AuthOptions,
 } from '@web3auth/modal'
-import { BASE_RPC_URL, ETHEREUM_RPC_URL, WEB3AUTH_CLIENT_ID } from '../constants/config'
+import { ETHEREUM_RPC_URL, WEB3_AUTH_BASE_RPC_URL, WEB3AUTH_CLIENT_ID } from '../constants/config'
 
 const web3AuthOptions: Web3AuthOptions = {
   clientId: WEB3AUTH_CLIENT_ID, // Pass your Web3Auth Client ID, ideally using an environment variable
@@ -47,7 +47,7 @@ const web3AuthOptions: Web3AuthOptions = {
       {
         chainId: '0x14a34',
         bundlerConfig: {
-          url: BASE_RPC_URL,
+          url: WEB3_AUTH_BASE_RPC_URL,
         },
       },
     ],

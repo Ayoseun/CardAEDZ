@@ -152,7 +152,7 @@ export default function Dashboard() {
             setKernelClient(client);
 
             // Initialize escrow service with the new account
-            const service = new EscrowService(provider!!);
+            const service = new EscrowService(client,account.address);
             setEscrowService(service);
 
             // Mark passkey as created
@@ -224,7 +224,7 @@ export default function Dashboard() {
             setKernelClient(client);
 
             // Initialize escrow service
-            const service = new EscrowService(provider!!);
+            const service = new EscrowService(client,account.address);
             setEscrowService(service);
 
             await loadBalances(service);
@@ -240,9 +240,9 @@ export default function Dashboard() {
         if (!svc) return;
 
         try {
-            const tokenAddress = MOCK_USDC_ADDRESS;
-            const balance = await svc.getEscrowBalance(tokenAddress);
-            setEscrowBalance(parseFloat(balance));
+             const tokenAddress = MOCK_USDC_ADDRESS;
+            // const balance = await svc.getEscrowBalance(tokenAddress);
+            // setEscrowBalance(parseFloat(balance));
 
             const walletBal = await svc.getTokenBalance(tokenAddress);
             setWalletBalance(parseFloat(walletBal));
@@ -495,6 +495,7 @@ export default function Dashboard() {
                     onClose={() => setShowFundWalletModal(false)}
                     walletBalance={walletBalance}
                     mode="fund"
+                     address={kernelAccount.address}
                 />
             )}
 
@@ -502,6 +503,7 @@ export default function Dashboard() {
                 <TopUpModal
                     onClose={() => setShowTopUpCardModal(false)}
                     walletBalance={walletBalance}
+                    address={kernelAccount.address}
                     onDeposit={async (amount: any, network: any) => {
                         const txId = Date.now().toString();
                         setTransactions([

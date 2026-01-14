@@ -14,7 +14,7 @@ export function TopUpModal({
     walletBalance, 
     onDeposit, 
     mode = 'topup',
-    kernelAccount
+   address
 }: any) {
     const [amount, setAmount] = useState('');
     const [selectedWallet, setSelectedWallet] = useState<'EVM' | 'Solana'>('EVM');
@@ -26,7 +26,7 @@ export function TopUpModal({
     const isFundMode = mode === 'fund';
 
     // Get wallet addresses
-    const evmAddress = kernelAccount?.address;
+    const evmAddress = address;
     const solanaAddress = 'Sol...'; // This would come from Web3Auth Solana provider
 
     const handleDeposit = async () => {
