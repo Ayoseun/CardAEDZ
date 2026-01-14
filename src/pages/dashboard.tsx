@@ -95,13 +95,13 @@ export default function Dashboard() {
 
     // Create passkey wallet after Web3Auth login
     const createPasskeyWallet = async () => {
-        if (!userInfo?.email) return;
-        
+       // if (!userInfo?.email) return;
+        console.log("Creating passkey wallet...");
         setIsCreatingPasskey(true);
         try {
             // Create a new passkey
             const webAuthnKey = await toWebAuthnKey({
-                passkeyName: userInfo.email,
+                passkeyName: "userInfo.email",
                 passkeyServerUrl: ZERO_DEV_PASSKEY_SERVER_URL,
                 mode: WebAuthnMode.Register,
                 passkeyServerHeaders: {}
@@ -167,13 +167,13 @@ export default function Dashboard() {
 
     // Login with existing passkey
     const loginWithPasskey = async () => {
-        if (!userInfo?.email) return;
-        
+        //if (!userInfo?.email) return;
+        console.log("Logging in with existing passkey...");
         setIsLoading(true);
         try {
             // Login with existing passkey
             const webAuthnKey = await toWebAuthnKey({
-                passkeyName: userInfo.email,
+                passkeyName: "userInfo.email",
                 passkeyServerUrl: ZERO_DEV_PASSKEY_SERVER_URL,
                 mode: WebAuthnMode.Login,
                 passkeyServerHeaders: {}
