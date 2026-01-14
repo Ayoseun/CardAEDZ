@@ -267,7 +267,7 @@ function HowItWorksSection() {
         <div className="absolute left-6 top-0 bottom-0 w-0.5 bg-gray-200"></div>
 
         <div className="space-y-6">
-          {steps.map((step, idx) => (
+          {steps.map((step) => (
             <div
               key={step.number}
               className={`relative transition-all duration-500 ${flowProgress >= step.number ? 'opacity-100 scale-100' : 'opacity-50 scale-95'
