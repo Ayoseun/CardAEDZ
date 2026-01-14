@@ -49,7 +49,7 @@ export default function Dashboard() {
     const [transactions, setTransactions] = useState<Transaction[]>(mockTransactions);
     const [showDepositModal, setShowDepositModal] = useState(false);
     const [showWithdrawModal, setShowWithdrawModal] = useState(false);
-    const [cardBalance, setCardBalance] = useState(487.51);
+    const [cardBalance] = useState(487.51);
     const [escrowBalance, setEscrowBalance] = useState(0);
     const [walletBalance, setWalletBalance] = useState(1250.00);
     const [escrowService, setEscrowService] = useState<any>(null);
@@ -60,8 +60,8 @@ export default function Dashboard() {
     const [isCreatingPasskey, setIsCreatingPasskey] = useState(false);
     const [passkeyCreated, setPasskeyCreated] = useState(false);
 
-    const { connect, isConnected, loading: connectLoading } = useWeb3AuthConnect();
-    const { disconnect, loading: disconnectLoading } = useWeb3AuthDisconnect();
+    const { connect, isConnected, } = useWeb3AuthConnect();
+    const { disconnect } = useWeb3AuthDisconnect();
     const { userInfo } = useWeb3AuthUser();
     const { provider } = useWeb3Auth();
 

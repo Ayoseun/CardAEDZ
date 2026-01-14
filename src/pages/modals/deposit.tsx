@@ -1,14 +1,10 @@
 
-import React, { useState} from 'react';
+import  { useState} from 'react';
 import {
     ArrowDownLeft, 
-
     Loader,
     Lock
 } from 'lucide-react';
-
-
-
 
 export function DepositModal({ onClose, walletBalance, onDeposit }: any) {
     const [amount, setAmount] = useState('');

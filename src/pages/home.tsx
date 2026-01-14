@@ -1,4 +1,4 @@
-import React, { useState, type ComponentType, type ReactNode } from 'react';
+import  { useState, type ComponentType, type ReactNode } from 'react';
 import { Wallet, CreditCard, ArrowRightLeft, Globe, Download, Shield, Lock, CheckCircle, ChevronRight, Play, ArrowDown, DollarSign, Zap, WalletCards, LucideWallet, LucideWallet2, LogIn } from 'lucide-react';
 import {  useNavigate } from 'react-router-dom';
 
@@ -8,6 +8,7 @@ export default function LandingPage() {
 
   const navigate = useNavigate(); // For navigating back or to explore
   const [activeSection, setActiveSection] = useState('overview');
+  //@ts-ignore
   const [animating, setAnimating] = useState(false);
 
   const sections = [

@@ -1,9 +1,8 @@
 
 import {
-    Wallet,  Loader, Shield,
+    Wallet, Loader, Shield,
 
 } from 'lucide-react';
-
 
 
 

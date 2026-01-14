@@ -1,14 +1,9 @@
 import { useState, useEffect } from 'react';
 import {
-     ArrowUpRight,
-
+    ArrowUpRight,
     Loader,
-   Clock, AlertCircle
+    Clock, AlertCircle
 } from 'lucide-react';
-
-
-
-
 
 
 export function WithdrawModal({ onClose, maxAmount, escrowService, onWithdraw }: any) {
