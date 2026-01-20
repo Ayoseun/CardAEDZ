@@ -23,7 +23,8 @@ const ESCROW_ABI = [
         stateMutability: 'nonpayable',
         inputs: [
             { name: 'token', type: 'address' },
-            { name: 'amount', type: 'uint256' }
+            { name: 'amount', type: 'uint256' },
+            { name: 'user', type: 'address' }
         ],
         outputs: []
     },
@@ -32,7 +33,8 @@ const ESCROW_ABI = [
         type: 'function',
         stateMutability: 'nonpayable',
         inputs: [
-            { name: 'token', type: 'address' }
+            { name: 'token', type: 'address' },
+            { name: 'user', type: 'address' }
         ],
         outputs: []
     },
@@ -277,97 +279,97 @@ export class EscrowService {
         }
     }
 
-/**
- * Get spend proofs for user's escrow
- */
-async getSpendProofs(tokenAddress: Address): Promise<{
-    totalSpent: string;
-    monthlySpent: string;
-    proofs: Array<{
-        amount: string;
-        timestamp: number;
-        verified: boolean;
-        verifiedBy: string;
-    }>;
-}> {
-    try {
-        const userAddress = this.address;
+    /**
+     * Get spend proofs for user's escrow
+     */
+    async getSpendProofs(tokenAddress: Address): Promise<{
+        totalSpent: string;
+        monthlySpent: string;
+        proofs: Array<{
+            amount: string;
+            timestamp: number;
+            verified: boolean;
+            verifiedBy: string;
+        }>;
+    }> {
+        try {
+            const userAddress = this.address;
 
-        // Get escrow ID
-        const escrowId = await this.publicClient.readContract({
-            address: CONTRACTS.escrow,
-            abi: ESCROW_ABI,
-            functionName: 'getUserEscrowId',
-            args: [userAddress, tokenAddress]
-        });
+            // Get escrow ID
+            const escrowId = await this.publicClient.readContract({
+                address: CONTRACTS.escrow,
+                abi: ESCROW_ABI,
+                functionName: 'getUserEscrowId',
+                args: [userAddress, tokenAddress]
+            });
 
-        if (escrowId === 0n) {
+            if (escrowId === 0n) {
+                return {
+                    totalSpent: "0",
+                    monthlySpent: "0",
+                    proofs: []
+                };
+            }
+
+            // Get spend proofs
+            const proofs = await this.publicClient.readContract({
+                address: CONTRACTS.escrow,
+                abi: ESCROW_ABI,
+                functionName: 'getSpendProofs',
+                args: [escrowId]
+            }) as any[];
+
+            const decimals = await this.publicClient.readContract({
+                address: tokenAddress,
+                abi: ERC20_ABI,
+                functionName: 'decimals'
+            });
+
+            console.log("Fetched proofs:", proofs);
+
+            // Calculate totals - USING BIGINT THROUGHOUT
+            let totalSpent = 0n;
+            let monthlySpent = 0n;
+            const currentTime = BigInt(Math.floor(Date.now() / 1000));
+            const monthAgo = currentTime - BigInt(30 * 24 * 60 * 60);
+
+            const formattedProofs = proofs.map((proof: any) => {
+                // Access properties by name instead of index
+                const amount = proof.spentAmount; // Changed from proof[1]
+                const timestamp = proof.timestamp; // Changed from proof[2]
+
+                console.log("Proof timestamp:", timestamp);
+
+                totalSpent += amount;
+                if (timestamp >= monthAgo) {
+                    monthlySpent += amount;
+                }
+
+                console.log("Monthly spent:", monthlySpent);
+                console.log("Total spent:", totalSpent);
+
+                return {
+                    amount: formatUnits(amount, decimals),
+                    timestamp: Number(timestamp),
+                    verified: proof.verified, // Changed from proof[3]
+                    verifiedBy: proof.verifiedBy // Changed from proof[4]
+                };
+            });
+
+            return {
+                totalSpent: formatUnits(totalSpent, decimals),
+                monthlySpent: formatUnits(monthlySpent, decimals),
+                proofs: formattedProofs
+            };
+        } catch (error) {
+            console.error("Error getting spend proofs:", error);
             return {
                 totalSpent: "0",
                 monthlySpent: "0",
                 proofs: []
             };
         }
-
-        // Get spend proofs
-        const proofs = await this.publicClient.readContract({
-            address: CONTRACTS.escrow,
-            abi: ESCROW_ABI,
-            functionName: 'getSpendProofs',
-            args: [escrowId]
-        }) as any[];
-
-        const decimals = await this.publicClient.readContract({
-            address: tokenAddress,
-            abi: ERC20_ABI,
-            functionName: 'decimals'
-        });
-        
-        console.log("Fetched proofs:", proofs);
-        
-        // Calculate totals - USING BIGINT THROUGHOUT
-        let totalSpent = 0n;
-        let monthlySpent = 0n;
-        const currentTime = BigInt(Math.floor(Date.now() / 1000));
-        const monthAgo = currentTime - BigInt(30 * 24 * 60 * 60);
-
-        const formattedProofs = proofs.map((proof: any) => {
-            // Access properties by name instead of index
-            const amount = proof.spentAmount; // Changed from proof[1]
-            const timestamp = proof.timestamp; // Changed from proof[2]
-            
-            console.log("Proof timestamp:", timestamp);
-            
-            totalSpent += amount;
-            if (timestamp >= monthAgo) {
-                monthlySpent += amount;
-            }
-            
-            console.log("Monthly spent:", monthlySpent);
-            console.log("Total spent:", totalSpent);
-
-            return {
-                amount: formatUnits(amount, decimals),
-                timestamp: Number(timestamp),
-                verified: proof.verified, // Changed from proof[3]
-                verifiedBy: proof.verifiedBy // Changed from proof[4]
-            };
-        });
-
-        return {
-            totalSpent: formatUnits(totalSpent, decimals),
-            monthlySpent: formatUnits(monthlySpent, decimals),
-            proofs: formattedProofs
-        };
-    } catch (error) {
-        console.error("Error getting spend proofs:", error);
-        return {
-            totalSpent: "0",
-            monthlySpent: "0",
-            proofs: []
-        };
     }
-}
     /**
      * Approve token spending for escrow contract
      */
@@ -461,7 +463,7 @@ async getSpendProofs(tokenAddress: Address): Promise<{
                 address: CONTRACTS.escrow,
                 abi: ESCROW_ABI,
                 functionName: 'initiateWithdrawal',
-                args: [tokenAddress, amountInWei]
+                args: [tokenAddress, amountInWei,this.address]
             });
 
             const receipt = await this.publicClient.waitForTransactionReceipt({ hash });
@@ -475,13 +477,13 @@ async getSpendProofs(tokenAddress: Address): Promise<{
     /**
      * Complete withdrawal after timelock (no amount parameter needed!)
      */
-    async completeWithdrawal(tokenAddress: Address): Promise<any> {
+    async completeWithdrawal(tokenAddress: Address,): Promise<any> {
         try {
             const hash = await this.kernelClient.writeContract({
                 address: CONTRACTS.escrow,
                 abi: ESCROW_ABI,
                 functionName: 'completeWithdrawal',
-                args: [tokenAddress]
+                args: [tokenAddress,this.address]
             });
 
             const receipt = await this.publicClient.waitForTransactionReceipt({ hash });
