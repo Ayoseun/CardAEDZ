@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import {
     Wallet, CreditCard, ArrowUpRight, ArrowDownLeft, History,
-    LogOut, Settings, Lock, Key, ShoppingCart
+    LogOut, Settings, Key, ShoppingCart
 } from 'lucide-react';
 import {
     useWeb3AuthConnect,
@@ -31,7 +31,7 @@ import {
 } from "@zerodev/passkey-validator";
 import { createKernelAccount, createKernelAccountClient } from "@zerodev/sdk";
 import { KERNEL_V3_1, getEntryPoint } from "@zerodev/sdk/constants";
-import { createZeroDevPaymasterClient } from "@zerodev/sdk";
+//import { createZeroDevPaymasterClient } from "@zerodev/sdk";
 import { TopUpModal } from './modals/topUpModal';
 
 // Configuration
