@@ -11,9 +11,11 @@ const ESCROW_ABI = [
         stateMutability: 'nonpayable',
         inputs: [
             { name: 'token', type: 'address' },
-            { name: 'amount', type: 'uint256' }
+            { name: 'amount', type: 'uint256' },
+            { name: 'timelockDuration', type: 'uint256' },
+            { name: 'releasePercentagePerSpend', type: 'uint256' }
         ],
-        outputs: []
+        outputs: [{ name: '', type: 'uint256' }]
     },
     {
         name: 'initiateWithdrawal',
@@ -26,17 +28,44 @@ const ESCROW_ABI = [
         outputs: []
     },
     {
-        name: 'withdraw',
+        name: 'completeWithdrawal',
         type: 'function',
         stateMutability: 'nonpayable',
         inputs: [
-            { name: 'token', type: 'address' },
-            { name: 'amount', type: 'uint256' }
+            { name: 'token', type: 'address' }
         ],
         outputs: []
     },
     {
-        name: 'balances',
+        name: 'cancelWithdrawal',
+        type: 'function',
+        stateMutability: 'nonpayable',
+        inputs: [
+            { name: 'token', type: 'address' }
+        ],
+        outputs: []
+    },
+    {
+        name: 'reportSpend',
+        type: 'function',
+        stateMutability: 'nonpayable',
+        inputs: [
+            { name: 'escrowId', type: 'uint256' },
+            { name: 'spentAmount', type: 'uint256' }
+        ],
+        outputs: []
+    },
+    {
+        name: 'getAvailableBalance',
+        type: 'function',
+        stateMutability: 'view',
+        inputs: [
+            { name: 'escrowId', type: 'uint256' }
+        ],
+        outputs: [{ name: '', type: 'uint256' }]
+    },
+    {
+        name: 'getUserEscrowId',
         type: 'function',
         stateMutability: 'view',
         inputs: [
@@ -46,14 +75,45 @@ const ESCROW_ABI = [
         outputs: [{ name: '', type: 'uint256' }]
     },
     {
-        name: 'withdrawTimelocks',
+        name: 'getSpendProofs',
         type: 'function',
         stateMutability: 'view',
         inputs: [
-            { name: 'user', type: 'address' },
-            { name: 'token', type: 'address' }
+            { name: 'escrowId', type: 'uint256' }
         ],
-        outputs: [{ name: '', type: 'uint256' }]
+        outputs: [
+            {
+                name: '',
+                type: 'tuple[]',
+                components: [
+                    { name: 'escrowId', type: 'uint256' },
+                    { name: 'spentAmount', type: 'uint256' },
+                    { name: 'timestamp', type: 'uint256' },
+                    { name: 'verified', type: 'bool' },
+                    { name: 'verifiedBy', type: 'address' }
+                ]
+            }
+        ]
+    },
+    {
+        name: 'escrows',
+        type: 'function',
+        stateMutability: 'view',
+        inputs: [
+            { name: 'escrowId', type: 'uint256' }
+        ],
+        outputs: [
+            { name: 'user', type: 'address' },
+            { name: 'token', type: 'address' },
+            { name: 'totalDeposited', type: 'uint256' },
+            { name: 'releasedAmount', type: 'uint256' },
+            { name: 'creationTime', type: 'uint256' },
+            { name: 'timelockDuration', type: 'uint256' },
+            { name: 'releasePercentagePerSpend', type: 'uint256' },
+            { name: 'isActive', type: 'bool' },
+            { name: 'pendingWithdrawal', type: 'uint256' },
+            { name: 'withdrawUnlockTime', type: 'uint256' }
+        ]
     }
 ] as const;
 
@@ -119,12 +179,19 @@ export class EscrowService {
     async getEscrowBalance(tokenAddress: Address): Promise<string> {
         try {
             const userAddress = this.address;
-            
+
+            const escrowId = await this.publicClient.readContract({
+                address: CONTRACTS.escrow,
+                abi: ESCROW_ABI,
+                functionName: 'getUserEscrowId',
+                args: [userAddress, tokenAddress]
+            });
+
             const balance = await this.publicClient.readContract({
                 address: CONTRACTS.escrow,
                 abi: ESCROW_ABI,
-                functionName: 'balances',
-                args: [userAddress, tokenAddress]
+                functionName: 'getAvailableBalance',
+                args: [escrowId]
             });
 
             const decimals = await this.publicClient.readContract({
@@ -145,7 +212,7 @@ export class EscrowService {
      */
     async getTokenBalance(tokenAddress: Address): Promise<string> {
         try {
-             const userAddress = this.address;
+            const userAddress = this.address;
 
             const balance = await this.publicClient.readContract({
                 address: tokenAddress,
@@ -153,7 +220,7 @@ export class EscrowService {
                 functionName: 'balanceOf',
                 args: [userAddress]
             });
-
+            console.log("Token balance in wei:", balance);
             const decimals = await this.publicClient.readContract({
                 address: tokenAddress,
                 abi: ERC20_ABI,
@@ -168,6 +235,140 @@ export class EscrowService {
     }
 
     /**
+     * Report a spend to the escrow contract
+     */
+    async reportSpend(tokenAddress: Address, amount: string): Promise<any> {
+        try {
+            const userAddress = this.address;
+
+            // Get escrow ID
+            const escrowId = await this.publicClient.readContract({
+                address: CONTRACTS.escrow,
+                abi: ESCROW_ABI,
+                functionName: 'getUserEscrowId',
+                args: [userAddress, tokenAddress]
+            });
+
+            if (escrowId === 0n) {
+                throw new Error("No escrow found for this token");
+            }
+
+            const decimals = await this.publicClient.readContract({
+                address: tokenAddress,
+                abi: ERC20_ABI,
+                functionName: 'decimals'
+            });
+
+            const amountInWei = parseUnits(amount, decimals);
+
+            // Report spend using kernel client
+            const hash = await this.kernelClient.writeContract({
+                address: CONTRACTS.escrow,
+                abi: ESCROW_ABI,
+                functionName: 'reportSpend',
+                args: [escrowId, amountInWei]
+            });
+
+            const receipt = await this.publicClient.waitForTransactionReceipt({ hash });
+            return receipt;
+        } catch (error) {
+            console.error("Error reporting spend:", error);
+            throw error;
+        }
+    }
+
+/**
+ * Get spend proofs for user's escrow
+ */
+async getSpendProofs(tokenAddress: Address): Promise<{
+    totalSpent: string;
+    monthlySpent: string;
+    proofs: Array<{
+        amount: string;
+        timestamp: number;
+        verified: boolean;
+        verifiedBy: string;
+    }>;
+}> {
+    try {
+        const userAddress = this.address;
+
+        // Get escrow ID
+        const escrowId = await this.publicClient.readContract({
+            address: CONTRACTS.escrow,
+            abi: ESCROW_ABI,
+            functionName: 'getUserEscrowId',
+            args: [userAddress, tokenAddress]
+        });
+
+        if (escrowId === 0n) {
+            return {
+                totalSpent: "0",
+                monthlySpent: "0",
+                proofs: []
+            };
+        }
+
+        // Get spend proofs
+        const proofs = await this.publicClient.readContract({
+            address: CONTRACTS.escrow,
+            abi: ESCROW_ABI,
+            functionName: 'getSpendProofs',
+            args: [escrowId]
+        }) as any[];
+
+        const decimals = await this.publicClient.readContract({
+            address: tokenAddress,
+            abi: ERC20_ABI,
+            functionName: 'decimals'
+        });
+        
+        console.log("Fetched proofs:", proofs);
+        
+        // Calculate totals - USING BIGINT THROUGHOUT
+        let totalSpent = 0n;
+        let monthlySpent = 0n;
+        const currentTime = BigInt(Math.floor(Date.now() / 1000));
+        const monthAgo = currentTime - BigInt(30 * 24 * 60 * 60);
+
+        const formattedProofs = proofs.map((proof: any) => {
+            // Access properties by name instead of index
+            const amount = proof.spentAmount; // Changed from proof[1]
+            const timestamp = proof.timestamp; // Changed from proof[2]
+            
+            console.log("Proof timestamp:", timestamp);
+            
+            totalSpent += amount;
+            if (timestamp >= monthAgo) {
+                monthlySpent += amount;
+            }
+            
+            console.log("Monthly spent:", monthlySpent);
+            console.log("Total spent:", totalSpent);
+
+            return {
+                amount: formatUnits(amount, decimals),
+                timestamp: Number(timestamp),
+                verified: proof.verified, // Changed from proof[3]
+                verifiedBy: proof.verifiedBy // Changed from proof[4]
+            };
+        });
+
+        return {
+            totalSpent: formatUnits(totalSpent, decimals),
+            monthlySpent: formatUnits(monthlySpent, decimals),
+            proofs: formattedProofs
+        };
+    } catch (error) {
+        console.error("Error getting spend proofs:", error);
+        return {
+            totalSpent: "0",
+            monthlySpent: "0",
+            proofs: []
+        };
+    }
+}
+    /**
      * Approve token spending for escrow contract
      */
     async approveToken(tokenAddress: Address, amount: string): Promise<any> {
@@ -179,7 +380,7 @@ export class EscrowService {
             });
 
             const amountInWei = parseUnits(amount, decimals);
-             const userAddress = this.address;
+            const userAddress = this.address;
 
             // Check current allowance
             const currentAllowance = await this.publicClient.readContract({
@@ -213,7 +414,7 @@ export class EscrowService {
     /**
      * Deposit tokens into escrow
      */
-    async depositToEscrow(tokenAddress: Address, amount: string): Promise<any> {
+    async depositToEscrow(tokenAddress: Address, amount: string, timelockDuration: number, releasePercentagePerSpend: number): Promise<any> {
         try {
             const decimals = await this.publicClient.readContract({
                 address: tokenAddress,
@@ -231,9 +432,9 @@ export class EscrowService {
                 address: CONTRACTS.escrow,
                 abi: ESCROW_ABI,
                 functionName: 'deposit',
-                args: [tokenAddress, amountInWei]
-            });
+                args: [tokenAddress, amountInWei, timelockDuration, releasePercentagePerSpend]
 
+            });
             const receipt = await this.publicClient.waitForTransactionReceipt({ hash });
             return receipt;
         } catch (error) {
@@ -254,6 +455,7 @@ export class EscrowService {
             });
 
             const amountInWei = parseUnits(amount, decimals);
+            console.log("Initiating withdrawal of amount in wei:", amountInWei);
 
             const hash = await this.kernelClient.writeContract({
                 address: CONTRACTS.escrow,
@@ -271,23 +473,15 @@ export class EscrowService {
     }
 
     /**
-     * Complete withdrawal after timelock
+     * Complete withdrawal after timelock (no amount parameter needed!)
      */
-    async completeWithdrawal(tokenAddress: Address, amount: string): Promise<any> {
+    async completeWithdrawal(tokenAddress: Address): Promise<any> {
         try {
-            const decimals = await this.publicClient.readContract({
-                address: tokenAddress,
-                abi: ERC20_ABI,
-                functionName: 'decimals'
-            });
-
-            const amountInWei = parseUnits(amount, decimals);
-
             const hash = await this.kernelClient.writeContract({
                 address: CONTRACTS.escrow,
                 abi: ESCROW_ABI,
-                functionName: 'withdraw',
-                args: [tokenAddress, amountInWei]
+                functionName: 'completeWithdrawal',
+                args: [tokenAddress]
             });
 
             const receipt = await this.publicClient.waitForTransactionReceipt({ hash });
@@ -299,30 +493,77 @@ export class EscrowService {
     }
 
     /**
+     * Cancel pending withdrawal
+     */
+    async cancelWithdrawal(tokenAddress: Address): Promise<any> {
+        try {
+            const hash = await this.kernelClient.writeContract({
+                address: CONTRACTS.escrow,
+                abi: ESCROW_ABI,
+                functionName: 'cancelWithdrawal',
+                args: [tokenAddress]
+            });
+
+            const receipt = await this.publicClient.waitForTransactionReceipt({ hash });
+            return receipt;
+        } catch (error) {
+            console.error("Error cancelling withdrawal:", error);
+            throw error;
+        }
+    }
+
+    /**
      * Check withdrawal timelock status
      */
     async getWithdrawalTimelock(tokenAddress: Address): Promise<{
         unlockTime: number;
         isLocked: boolean;
         remainingTime: number;
+        pendingAmount: string;
     }> {
         try {
-             const userAddress = this.address;
+            const userAddress = this.address;
 
-            const unlockTime = await this.publicClient.readContract({
+            // Get escrow ID
+            const escrowId = await this.publicClient.readContract({
                 address: CONTRACTS.escrow,
                 abi: ESCROW_ABI,
-                functionName: 'withdrawTimelocks',
+                functionName: 'getUserEscrowId',
                 args: [userAddress, tokenAddress]
             });
 
+            if (escrowId === 0n) {
+                return {
+                    unlockTime: 0,
+                    isLocked: false,
+                    remainingTime: 0,
+                    pendingAmount: "0"
+                };
+            }
+
+            // Get escrow details
+            const escrowData = await this.publicClient.readContract({
+                address: CONTRACTS.escrow,
+                abi: ESCROW_ABI,
+                functionName: 'escrows',
+                args: [escrowId]
+            });
+
+            const decimals = await this.publicClient.readContract({
+                address: tokenAddress,
+                abi: ERC20_ABI,
+                functionName: 'decimals'
+            });
+
             const currentTime = Math.floor(Date.now() / 1000);
-            const unlockTimeNumber = Number(unlockTime);
+            const unlockTimeNumber = Number(escrowData[9]); // withdrawUnlockTime
+            const pendingWithdrawal = escrowData[8]; // pendingWithdrawal
 
             return {
                 unlockTime: unlockTimeNumber,
-                isLocked: unlockTimeNumber > currentTime,
+                isLocked: unlockTimeNumber > currentTime && pendingWithdrawal > 0n,
                 remainingTime: Math.max(0, unlockTimeNumber - currentTime),
+                pendingAmount: formatUnits(pendingWithdrawal, decimals)
             };
         } catch (error) {
             console.error("Error getting withdrawal timelock:", error);

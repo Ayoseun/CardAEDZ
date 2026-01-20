@@ -1,19 +1,18 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
     Wallet, CreditCard, ArrowUpRight, ArrowDownLeft, History,
-    LogOut, Settings, Lock, Key
+    LogOut, Settings, Lock, Key, ShoppingCart
 } from 'lucide-react';
 import {
     useWeb3AuthConnect,
     useWeb3AuthDisconnect,
     useWeb3AuthUser,
-    useWeb3Auth
 } from "@web3auth/modal/react";
 import { useSolanaWallet } from '@web3auth/modal/react/solana'
 import { createPublicClient, http } from 'viem';
 import { baseSepolia } from 'viem/chains';
 import { EscrowService } from '../constants/escrowContract';
-import {  ZERO_DEV_RPC_URL, ZERO_DEV_PASSKEY_SERVER_URL, MOCK_USDC_ADDRESS } from '../constants/config';
+import { ZERO_DEV_RPC_URL, ZERO_DEV_PASSKEY_SERVER_URL, MOCK_USDC_ADDRESS } from '../constants/config';
 import { LoginScreen } from './login';
 import { WithdrawModal } from './modals/withdrawal';
 import { mockTransactions, type Transaction, type User } from '../utils/types';
@@ -35,10 +34,10 @@ import { KERNEL_V3_1, getEntryPoint } from "@zerodev/sdk/constants";
 import { createZeroDevPaymasterClient } from "@zerodev/sdk";
 import { TopUpModal } from './modals/topUpModal';
 
-// Configuration - Replace with your actual values
-
+// Configuration
 const CHAIN = baseSepolia;
 const entryPoint = getEntryPoint("0.7");
+const HARDCODED_SPEND_AMOUNT = "25.00"; // $25 per transaction
 
 export default function Dashboard() {
     const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -50,35 +49,31 @@ export default function Dashboard() {
     const [showFundWalletModal, setShowFundWalletModal] = useState(false);
     const [showTopUpCardModal, setShowTopUpCardModal] = useState(false);
     const [showWithdrawModal, setShowWithdrawModal] = useState(false);
-    //@ts-ignore
-    const [showTopUpModal, setShowTopUpModal] = useState(false);
-    //@ts-ignore
-    const [cardBalance, setCardBalance] = useState(487.51);
-    //@ts-ignore
-    const [escrowBalance, setEscrowBalance] = useState(0);
-    const [walletBalance, setWalletBalance] = useState(1250.00);
+    const [cardBalance, setCardBalance] = useState(0.00);
+    const [walletBalance, setWalletBalance] = useState(0.00);
+    const [monthlySpent, setMonthlySpent] = useState(0.00);
+    const [isSpending, setIsSpending] = useState(false);
     const [escrowService, setEscrowService] = useState<any>(null);
     //@ts-ignore
     const { solanaWallet, connection } = useSolanaWallet()
+    
     // ZeroDev states
     const [kernelAccount, setKernelAccount] = useState<any>(null);
     const [kernelClient, setKernelClient] = useState<any>(null);
     const [isCreatingPasskey, setIsCreatingPasskey] = useState(false);
     const [passkeyCreated, setPasskeyCreated] = useState(false);
-
+    const loginAttemptedRef = useRef(false);
     const { connect, isConnected } = useWeb3AuthConnect();
-    const { disconnect, } = useWeb3AuthDisconnect();
+    const { disconnect } = useWeb3AuthDisconnect();
     const { userInfo } = useWeb3AuthUser();
-  
 
     const publicClient = createPublicClient({
         transport: http(ZERO_DEV_RPC_URL),
         chain: CHAIN,
     });
 
-    // Handle Web3Auth authentication
     useEffect(() => {
-        if (isConnected && userInfo) {
+        if (isConnected && userInfo && !loginAttemptedRef.current) {
             setIsAuthenticated(true);
             setUser({
                 name: userInfo.name || 'User',
@@ -87,11 +82,10 @@ export default function Dashboard() {
                 avatar: userInfo.profileImage || ''
             } as any);
 
-            // Check if user already has a passkey wallet
             const hasPasskey = localStorage.getItem(`passkey_created_${"userInfo.email"}`);
             if (hasPasskey === 'true') {
                 setPasskeyCreated(true);
-                // Auto-login with existing passkey
+                loginAttemptedRef.current = true;
                 loginWithPasskey();
             }
         }
@@ -104,7 +98,6 @@ export default function Dashboard() {
         console.log("Creating passkey wallet...");
         setIsCreatingPasskey(true);
         try {
-            // Create a new passkey
             const webAuthnKey = await toWebAuthnKey({
                 passkeyName: "userInfo.email",
                 passkeyServerUrl: ZERO_DEV_PASSKEY_SERVER_URL,
@@ -112,7 +105,6 @@ export default function Dashboard() {
                 passkeyServerHeaders: {}
             });
 
-            // Create passkey validator
             const passkeyValidator = await toPasskeyValidator(publicClient, {
                 webAuthnKey,
                 entryPoint,
@@ -120,7 +112,6 @@ export default function Dashboard() {
                 validatorContractVersion: PasskeyValidatorContractVersion.V0_0_3_PATCHED
             });
 
-            // Create Kernel account with passkey validator
             const account = await createKernelAccount(publicClient, {
                 plugins: {
                     sudo: passkeyValidator,
@@ -129,33 +120,19 @@ export default function Dashboard() {
                 kernelVersion: KERNEL_V3_1
             });
 
-            // Create Kernel client with paymaster for gasless transactions
             const client = createKernelAccountClient({
                 account,
                 chain: CHAIN,
                 bundlerTransport: http(ZERO_DEV_RPC_URL),
                 client: publicClient,
-                paymaster: {
-                    getPaymasterData: async (userOperation) => {
-                        const zerodevPaymaster = createZeroDevPaymasterClient({
-                            chain: CHAIN,
-                            transport: http(ZERO_DEV_RPC_URL),
-                        });
-                        return zerodevPaymaster.sponsorUserOperation({
-                            userOperation,
-                        });
-                    }
-                },
             });
 
             setKernelAccount(account);
             setKernelClient(client);
 
-            // Initialize escrow service with the new account
-            const service = new EscrowService(client,account.address);
+            const service = new EscrowService(client, account.address);
             setEscrowService(service);
 
-            // Mark passkey as created
             localStorage.setItem(`passkey_created_${"userInfo.email"}`, 'true');
             setPasskeyCreated(true);
 
@@ -176,7 +153,6 @@ export default function Dashboard() {
         console.log("Logging in with existing passkey...");
         setIsLoading(true);
         try {
-            // Login with existing passkey
             const webAuthnKey = await toWebAuthnKey({
                 passkeyName: "userInfo.email",
                 passkeyServerUrl: ZERO_DEV_PASSKEY_SERVER_URL,
@@ -184,7 +160,6 @@ export default function Dashboard() {
                 passkeyServerHeaders: {}
             });
 
-            // Create passkey validator
             const passkeyValidator = await toPasskeyValidator(publicClient, {
                 webAuthnKey,
                 entryPoint,
@@ -192,7 +167,6 @@ export default function Dashboard() {
                 validatorContractVersion: PasskeyValidatorContractVersion.V0_0_3_PATCHED
             });
 
-            // Recreate Kernel account
             const account = await createKernelAccount(publicClient, {
                 plugins: {
                     sudo: passkeyValidator,
@@ -201,30 +175,17 @@ export default function Dashboard() {
                 kernelVersion: KERNEL_V3_1
             });
 
-            // Recreate Kernel client
             const client = createKernelAccountClient({
                 account,
                 chain: CHAIN,
                 bundlerTransport: http(ZERO_DEV_RPC_URL),
                 client: publicClient,
-                paymaster: {
-                    getPaymasterData: async (userOperation) => {
-                        const zerodevPaymaster = createZeroDevPaymasterClient({
-                            chain: CHAIN,
-                            transport: http(ZERO_DEV_RPC_URL),
-                        });
-                        return zerodevPaymaster.sponsorUserOperation({
-                            userOperation,
-                        });
-                    }
-                },
             });
 
             setKernelAccount(account);
             setKernelClient(client);
 
-            // Initialize escrow service
-            const service = new EscrowService(client,account.address);
+            const service = new EscrowService(client, account.address);
             setEscrowService(service);
 
             await loadBalances(service);
@@ -240,14 +201,84 @@ export default function Dashboard() {
         if (!svc) return;
 
         try {
-             const tokenAddress = MOCK_USDC_ADDRESS;
-            // const balance = await svc.getEscrowBalance(tokenAddress);
-            // setEscrowBalance(parseFloat(balance));
+            const tokenAddress = MOCK_USDC_ADDRESS;
+            const balance = await svc.getEscrowBalance(tokenAddress);
+            setCardBalance(parseFloat(balance));
 
             const walletBal = await svc.getTokenBalance(tokenAddress);
             setWalletBalance(parseFloat(walletBal));
+
+            // Load spending data
+            const spendData = await svc.getSpendProofs(tokenAddress);
+            setMonthlySpent(parseFloat(spendData.monthlySpent));
         } catch (error) {
             console.error("Error loading balances:", error);
+        }
+    };
+
+    const handleSpend = async () => {
+        if (!escrowService) {
+            alert('Escrow service not initialized');
+            return;
+        }
+
+        const spendAmount = parseFloat(HARDCODED_SPEND_AMOUNT);
+        if (cardBalance < spendAmount) {
+            alert('Insufficient card balance');
+            return;
+        }
+
+        setIsSpending(true);
+        const txId = Date.now().toString();
+
+        // Add pending transaction
+        setTransactions([
+            {
+                id: txId,
+                type: 'spend',
+                amount: spendAmount,
+                to: 'Merchant',
+                status: 'pending',
+                date: new Date().toISOString(),
+                network: 'Base'
+            },
+            ...transactions
+        ]);
+
+        try {
+            const tokenAddress = MOCK_USDC_ADDRESS;
+            
+            // Report spend to smart contract
+            const receipt = await escrowService.reportSpend(tokenAddress, HARDCODED_SPEND_AMOUNT);
+            console.log('Spend reported:', receipt);
+
+            // Update transaction status
+            setTransactions(prev =>
+                prev.map(tx => tx.id === txId
+                    ? { ...tx, status: 'completed', txHash: receipt.transactionHash }
+                    : tx
+                )
+            );
+
+            // Optimistically update balances
+            setCardBalance(prev => prev - spendAmount);
+            setMonthlySpent(prev => prev + spendAmount);
+
+            // Reload balances from contract
+            await loadBalances();
+
+            alert(`Successfully spent $${HARDCODED_SPEND_AMOUNT}!`);
+        } catch (error) {
+            console.error("Spend failed:", error);
+            
+            // Update transaction status to failed
+            setTransactions(prev =>
+                prev.map(tx => tx.id === txId ? { ...tx, status: 'failed' } : tx)
+            );
+            
+            alert('Failed to process spend. Please try again.');
+        } finally {
+            setIsSpending(false);
         }
     };
 
@@ -351,6 +382,9 @@ export default function Dashboard() {
         );
     }
 
+    // Calculate spending progress (assuming $500 monthly limit)
+    const monthlyLimit = 500;
+    const spendingProgress = (monthlySpent / monthlyLimit) * 100;
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50">
@@ -401,19 +435,12 @@ export default function Dashboard() {
                         icon={CreditCard}
                         color="indigo"
                         showBalance={showBalance}
-                        onToggleBalance={() => {
-                            loadBalances();
+                        onToggleBalance={async() => {
+                           await loadBalances();
                             setShowBalance(!showBalance)
                         }}
                     />
-                    <BalanceCard
-                        title="Escrow Balance"
-                        amount={escrowBalance}
-                        icon={Lock}
-                        color="purple"
-                        showBalance={showBalance}
-                        onToggleBalance={() => setShowBalance(!showBalance)}
-                    />
+                     
                     <BalanceCard
                         title="Wallet Balance"
                         amount={walletBalance}
@@ -422,9 +449,39 @@ export default function Dashboard() {
                         showBalance={showBalance}
                         onToggleBalance={() => setShowBalance(!showBalance)}
                     />
+
+                    {/* Spending Card */}
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                        <div className="flex items-center justify-between mb-4">
+                            <div className="flex items-center space-x-2">
+                                <ShoppingCart className="w-5 h-5 text-orange-600" />
+                                <span className="font-medium text-gray-900">This Month</span>
+                            </div>
+                            <span className="text-sm text-gray-500">${monthlyLimit} limit</span>
+                        </div>
+                        <div className="mb-3">
+                            <div className="flex items-baseline justify-between mb-2">
+                                <span className="text-3xl font-bold text-gray-900">
+                                    ${monthlySpent.toFixed(2)}
+                                </span>
+                                <span className="text-sm text-gray-500">
+                                    {spendingProgress.toFixed(0)}%
+                                </span>
+                            </div>
+                            <div className="w-full bg-gray-200 rounded-full h-2">
+                                <div 
+                                    className="bg-gradient-to-r from-orange-500 to-red-500 h-2 rounded-full transition-all duration-300"
+                                    style={{ width: `${Math.min(spendingProgress, 100)}%` }}
+                                />
+                            </div>
+                        </div>
+                        <p className="text-xs text-gray-500">
+                            ${(monthlyLimit - monthlySpent).toFixed(2)} remaining
+                        </p>
+                    </div>
                 </div>
 
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
                     <QuickAction
                         icon={ArrowDownLeft}
                         label="Fund Wallet"
@@ -447,6 +504,21 @@ export default function Dashboard() {
                         onClick={() => setActiveTab('card')}
                         color="indigo"
                     />
+                    
+                    {/* Spend Button */}
+                    <button
+                        onClick={handleSpend}
+                        disabled={isSpending || cardBalance < parseFloat(HARDCODED_SPEND_AMOUNT)}
+                        className="flex flex-col items-center justify-center p-6 bg-white rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed group"
+                    >
+                        <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-red-500 rounded-full flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                            <ShoppingCart className="w-6 h-6 text-white" />
+                        </div>
+                        <span className="text-sm font-medium text-gray-700 group-hover:text-gray-900">
+                            {isSpending ? 'Processing...' : `Spend $${HARDCODED_SPEND_AMOUNT}`}
+                        </span>
+                    </button>
+
                     <QuickAction
                         icon={History}
                         label="History"
@@ -484,7 +556,6 @@ export default function Dashboard() {
                             cardBalance={cardBalance}
                             user={user}
                             onTopUp={() => setShowTopUpCardModal(true)}
-
                         />
                     )}
                 </div>
@@ -495,7 +566,7 @@ export default function Dashboard() {
                     onClose={() => setShowFundWalletModal(false)}
                     walletBalance={walletBalance}
                     mode="fund"
-                     address={kernelAccount.address}
+                    address={kernelAccount.address}
                 />
             )}
 
@@ -522,7 +593,7 @@ export default function Dashboard() {
                         try {
                             if (escrowService) {
                                 const tokenAddress = MOCK_USDC_ADDRESS;
-                                const receipt = await escrowService.depositToEscrow(tokenAddress, amount);
+                                const receipt = await escrowService.depositToEscrow(tokenAddress, amount, 0, 0);
 
                                 setTransactions(prev =>
                                     prev.map(tx => tx.id === txId
@@ -540,24 +611,31 @@ export default function Dashboard() {
                             );
                         }
                     }}
-
                 />
             )}
 
             {showWithdrawModal && (
                 <WithdrawModal
                     onClose={() => setShowWithdrawModal(false)}
-                    maxAmount={escrowBalance}
+                    maxAmount={cardBalance}
                     escrowService={escrowService}
-                    onWithdraw={async (amount: any) => {
+                    onWithdrawComplete={async (withdrawnAmount: string) => {
+                        const amount = parseFloat(withdrawnAmount);
+                        
+                        if (isNaN(amount) || amount <= 0) {
+                            console.error('Invalid withdrawal amount:', withdrawnAmount);
+                            return;
+                        }
+
                         const txId = Date.now().toString();
+                        
                         setTransactions([
                             {
                                 id: txId,
                                 type: 'withdraw',
-                                amount: parseFloat(amount),
+                                amount: amount,
                                 to: 'Wallet',
-                                status: 'pending',
+                                status: 'completed',
                                 date: new Date().toISOString(),
                                 network: 'Base'
                             },
@@ -565,24 +643,9 @@ export default function Dashboard() {
                         ]);
 
                         try {
-                            if (escrowService) {
-                                const tokenAddress = MOCK_USDC_ADDRESS;
-                                const receipt = await escrowService.initiateWithdrawal(tokenAddress, amount);
-
-                                setTransactions(prev =>
-                                    prev.map(tx => tx.id === txId
-                                        ? { ...tx, status: 'completed', txHash: receipt.transactionHash }
-                                        : tx
-                                    )
-                                );
-
-                                await loadBalances();
-                            }
+                            await loadBalances();
                         } catch (error) {
-                            console.error("Withdrawal failed:", error);
-                            setTransactions(prev =>
-                                prev.map(tx => tx.id === txId ? { ...tx, status: 'failed' } : tx)
-                            );
+                            console.error("Failed to refresh balances:", error);
                         }
                     }}
                 />
