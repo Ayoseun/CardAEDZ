@@ -4,12 +4,14 @@ import {
     Loader,
     Clock,
     AlertCircle,
-    X
+    X,
+    Wallet
 } from 'lucide-react';
 import { MOCK_USDC_ADDRESS } from '../../constants/config';
 
 export function WithdrawModal({ onClose, maxAmount, escrowService, onWithdrawComplete }: any) {
     const [amount, setAmount] = useState('');
+    const [walletAddress, setWalletAddress] = useState('');
     const [isProcessing, setIsProcessing] = useState(false);
     const [timelockInfo, setTimelockInfo] = useState<any>(null);
     const [isLoading, setIsLoading] = useState(true);
@@ -67,10 +69,11 @@ export function WithdrawModal({ onClose, maxAmount, escrowService, onWithdrawCom
             const tokenAddress = MOCK_USDC_ADDRESS;
             const withdrawAmount = timelockInfo?.pendingAmount || '0';
             
-            // Complete the withdrawal
-            await escrowService.completeWithdrawal(tokenAddress);
+            // Complete the withdrawal with optional external address
+            // If walletAddress is empty, it will send to user's address by default
+            await escrowService.completeWithdrawal(tokenAddress, walletAddress || undefined);
             
-            alert('Withdrawal completed successfully!');
+            alert(`Withdrawal completed successfully!${walletAddress ? ` Sent to ${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}` : ''}`);
             
             // Call parent callback with the withdrawn amount
             if (onWithdrawComplete) {
@@ -105,9 +108,15 @@ export function WithdrawModal({ onClose, maxAmount, escrowService, onWithdrawCom
         }
     };
 
+    const isValidAddress = (address: string) => {
+        if (!address) return true; // Empty is valid (will use user's address)
+        // Basic Ethereum address validation
+        return /^0x[a-fA-F0-9]{40}$/.test(address);
+    };
+
     const hasPendingWithdrawal = timelockInfo && parseFloat(timelockInfo.pendingAmount) > 0;
     //@ts-ignore
-   const canComplete = hasPendingWithdrawal && !timelockInfo.isLocked;
+    const canComplete = hasPendingWithdrawal && !timelockInfo.isLocked;
 
     return (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -161,6 +170,37 @@ export function WithdrawModal({ onClose, maxAmount, escrowService, onWithdrawCom
                                         )}
                                     </div>
                                 </div>
+                            </div>
+                        )}
+
+                        {/* Wallet Address Input - Show when completing withdrawal */}
+                        {hasPendingWithdrawal && !timelockInfo.isLocked && (
+                            <div className="mb-4">
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    <div className="flex items-center space-x-2">
+                                        <Wallet className="w-4 h-4" />
+                                        <span>Recipient Address (Optional)</span>
+                                    </div>
+                                </label>
+                                <input
+                                    type="text"
+                                    placeholder="0x... (leave empty to use your connected wallet)"
+                                    value={walletAddress}
+                                    onChange={(e) => setWalletAddress(e.target.value)}
+                                    className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-green-500 outline-none ${
+                                        walletAddress && !isValidAddress(walletAddress) 
+                                            ? 'border-red-300 focus:ring-red-500' 
+                                            : ''
+                                    }`}
+                                />
+                                {walletAddress && !isValidAddress(walletAddress) && (
+                                    <p className="text-xs text-red-600 mt-1">
+                                        Invalid Ethereum address format
+                                    </p>
+                                )}
+                                <p className="text-xs text-gray-500 mt-1">
+                                    Leave empty to send funds to your connected wallet
+                                </p>
                             </div>
                         )}
 
@@ -230,7 +270,7 @@ export function WithdrawModal({ onClose, maxAmount, escrowService, onWithdrawCom
                                     </button>
                                     <button
                                         onClick={handleCompleteWithdrawal}
-                                        disabled={isProcessing || timelockInfo.isLocked}
+                                        disabled={isProcessing || timelockInfo.isLocked || (walletAddress && !isValidAddress(walletAddress))}
                                         className="px-5 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:bg-gray-400 flex items-center space-x-2"
                                     >
                                         {isProcessing ? (
