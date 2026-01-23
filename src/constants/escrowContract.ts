@@ -2,6 +2,12 @@
 import { createPublicClient, http, parseUnits, formatUnits, type Address } from 'viem';
 import { baseSepolia } from 'viem/chains';
 import { BASE_POOL_ADDRESS, BASE_RPC_URL, MOCK_USDC_ADDRESS } from './config';
+import {
+
+
+    parseEther,
+} from "viem";
+import { gasTokenAddresses, getERC20PaymasterApproveCall } from '@zerodev/sdk';
 
 // Contract ABIs
 const ESCROW_ABI = [
@@ -165,14 +171,19 @@ export class EscrowService {
     private kernelClient: any;
     private publicClient: any;
     private address: any;
+    private paymasterClient: any;
+    private entryPoint: any;
 
-    constructor(kernelClient: any, userAddress: any) {
+    constructor(kernelClient: any, userAddress: any, paymasterClient: any, entryPoint: any) {
         this.kernelClient = kernelClient;
         this.address = userAddress;
         this.publicClient = createPublicClient({
             chain: baseSepolia,
             transport: http(BASE_RPC_URL)
         });
+        this.paymasterClient = paymasterClient
+        this.entryPoint = entryPoint
+       
     }
 
     /**
@@ -430,7 +441,13 @@ export class EscrowService {
             await this.approveToken(tokenAddress, amount);
 
             // Then deposit using kernel client
-            const hash = await this.kernelClient.writeContract({
+            const hash = await this.kernelClient.writeContract(
+                await getERC20PaymasterApproveCall(this.paymasterClient, {
+                    //@ts-ignore
+                    gasToken: gasTokenAddresses[chain.id]["USDC"],
+                    approveAmount: parseEther("1"),
+                    entryPoint: this.entryPoint,
+                }), {
                 address: CONTRACTS.escrow,
                 abi: ESCROW_ABI,
                 functionName: 'deposit',
@@ -463,7 +480,7 @@ export class EscrowService {
                 address: CONTRACTS.escrow,
                 abi: ESCROW_ABI,
                 functionName: 'initiateWithdrawal',
-                args: [tokenAddress, amountInWei,this.address]
+                args: [tokenAddress, amountInWei, this.address]
             });
 
             const receipt = await this.publicClient.waitForTransactionReceipt({ hash });
@@ -483,7 +500,7 @@ export class EscrowService {
                 address: CONTRACTS.escrow,
                 abi: ESCROW_ABI,
                 functionName: 'completeWithdrawal',
-                args: [tokenAddress,this.address]
+                args: [tokenAddress, this.address]
             });
 
             const receipt = await this.publicClient.waitForTransactionReceipt({ hash });
