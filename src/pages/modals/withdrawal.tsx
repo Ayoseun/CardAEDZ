@@ -7,7 +7,7 @@ import {
     X,
     Wallet
 } from 'lucide-react';
-import { MOCK_USDC_ADDRESS } from '../../constants/config';
+import { USDC_ADDRESS } from '../../constants/config';
 
 export function WithdrawModal({ onClose, maxAmount, escrowService, onWithdrawComplete }: any) {
     const [amount, setAmount] = useState('');
@@ -15,7 +15,7 @@ export function WithdrawModal({ onClose, maxAmount, escrowService, onWithdrawCom
     const [isProcessing, setIsProcessing] = useState(false);
     const [timelockInfo, setTimelockInfo] = useState<any>(null);
     const [isLoading, setIsLoading] = useState(true);
-
+    const tokenAddress = USDC_ADDRESS;
     useEffect(() => {
         if (escrowService) {
             checkTimelock();
@@ -25,7 +25,7 @@ export function WithdrawModal({ onClose, maxAmount, escrowService, onWithdrawCom
     const checkTimelock = async () => {
         setIsLoading(true);
         try {
-            const tokenAddress = MOCK_USDC_ADDRESS;
+
             const info = await escrowService.getWithdrawalTimelock(tokenAddress);
             setTimelockInfo(info);
         } catch (error) {
@@ -44,14 +44,14 @@ export function WithdrawModal({ onClose, maxAmount, escrowService, onWithdrawCom
         setIsProcessing(true);
 
         try {
-            const tokenAddress = MOCK_USDC_ADDRESS;
+
             await escrowService.initiateWithdrawal(tokenAddress, amount);
-            
+
             // Refresh timelock info
             await checkTimelock();
-            
+
             alert('Withdrawal initiated! Please wait for the timelock period to expire.');
-            
+
             // Clear the amount input after successful initiation
             setAmount('');
         } catch (error) {
@@ -66,20 +66,20 @@ export function WithdrawModal({ onClose, maxAmount, escrowService, onWithdrawCom
         setIsProcessing(true);
 
         try {
-            const tokenAddress = MOCK_USDC_ADDRESS;
+
             const withdrawAmount = timelockInfo?.pendingAmount || '0';
-            
+
             // Complete the withdrawal with optional external address
             // If walletAddress is empty, it will send to user's address by default
             await escrowService.completeWithdrawal(tokenAddress, walletAddress || undefined);
-            
+
             alert(`Withdrawal completed successfully!${walletAddress ? ` Sent to ${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}` : ''}`);
-            
+
             // Call parent callback with the withdrawn amount
             if (onWithdrawComplete) {
                 await onWithdrawComplete(withdrawAmount);
             }
-            
+
             // Close modal after successful completion
             onClose();
         } catch (error) {
@@ -93,12 +93,12 @@ export function WithdrawModal({ onClose, maxAmount, escrowService, onWithdrawCom
         setIsProcessing(true);
 
         try {
-            const tokenAddress = MOCK_USDC_ADDRESS;
+
             await escrowService.cancelWithdrawal(tokenAddress);
-            
+
             // Refresh timelock info
             await checkTimelock();
-            
+
             alert('Withdrawal cancelled successfully!');
         } catch (error) {
             console.error('Cancel withdrawal failed:', error);
@@ -123,7 +123,7 @@ export function WithdrawModal({ onClose, maxAmount, escrowService, onWithdrawCom
             <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
                 <div className="flex items-center justify-between mb-4">
                     <h2 className="text-xl font-bold text-gray-900">Withdraw from Escrow</h2>
-                    <button 
+                    <button
                         onClick={onClose}
                         className="text-gray-400 hover:text-gray-600"
                     >
@@ -143,15 +143,13 @@ export function WithdrawModal({ onClose, maxAmount, escrowService, onWithdrawCom
                     <>
                         {/* Pending Withdrawal Warning */}
                         {hasPendingWithdrawal && (
-                            <div className={`border rounded-lg p-3 mb-4 ${
-                                timelockInfo.isLocked 
-                                    ? 'bg-yellow-50 border-yellow-200' 
+                            <div className={`border rounded-lg p-3 mb-4 ${timelockInfo.isLocked
+                                    ? 'bg-yellow-50 border-yellow-200'
                                     : 'bg-green-50 border-green-200'
-                            }`}>
+                                }`}>
                                 <div className="flex items-start space-x-2">
-                                    <Clock className={`w-4 h-4 mt-0.5 ${
-                                        timelockInfo.isLocked ? 'text-yellow-600' : 'text-green-600'
-                                    }`} />
+                                    <Clock className={`w-4 h-4 mt-0.5 ${timelockInfo.isLocked ? 'text-yellow-600' : 'text-green-600'
+                                        }`} />
                                     <div className="text-sm">
                                         <p className="font-semibold">
                                             {timelockInfo.isLocked ? 'Withdrawal Pending' : 'Withdrawal Ready!'}
@@ -187,11 +185,10 @@ export function WithdrawModal({ onClose, maxAmount, escrowService, onWithdrawCom
                                     placeholder="0x... (leave empty to use your connected wallet)"
                                     value={walletAddress}
                                     onChange={(e) => setWalletAddress(e.target.value)}
-                                    className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-green-500 outline-none ${
-                                        walletAddress && !isValidAddress(walletAddress) 
-                                            ? 'border-red-300 focus:ring-red-500' 
+                                    className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-green-500 outline-none ${walletAddress && !isValidAddress(walletAddress)
+                                            ? 'border-red-300 focus:ring-red-500'
                                             : ''
-                                    }`}
+                                        }`}
                                 />
                                 {walletAddress && !isValidAddress(walletAddress) && (
                                     <p className="text-xs text-red-600 mt-1">

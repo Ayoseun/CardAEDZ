@@ -1,140 +1,72 @@
-export const WEB3AUTH_CLIENT_ID = import.meta.env.VITE_WEB3_AUTH;
-
-export const VAULT_CONTRACT_ID = import.meta.env.VITE_VAULT_CONTRACT_ID;
-export const MOCK_USDC_ADDRESS = import.meta.env.VITE_MOCK_USDC_ADDRESS
-export const ETHEREUM_RPC_URL = import.meta.env.VITE_ETHEREUM_RPC_URL;
-export const POLYGON_RPC_URL = import.meta.env.VITE_POLYGON_RPC_URL;
-export const BSC_RPC_URL = import.meta.env.VITE_BSC_RPC_URL;
-export const AVALANCHE_RPC_URL = import.meta.env.VITE_AVALANCHE_RPC_URL;
-export const ARBITRUM_RPC_URL = import.meta.env.VITE_ARBITRUM_RPC_URL;
-export const OPTIMISM_RPC_URL = import.meta.env.VITE_OPTIMISM_RPC_URL;
-export const BASE_RPC_URL = import.meta.env.VITE_BASE_RPC_URL;
 export const ZERO_DEV_RPC_URL = import.meta.env.VITE_ZERO_DEV_RPC_URL;
 export const ZERO_DEV_PASSKEY_SERVER_URL = import.meta.env.VITE_ZERO_DEV_PASSKEY_SERVER_URL;
-export const BASE_POOL_ADDRESS = import.meta.env.VITE_BASE_POOL_ADDRESS;
+
+
+
+export const RELAY_LINK_API_URL =  import.meta.env.VITE_RELAY_LINK_API_URL;
+export const RELAY_LINK_TESTNET_API = import.meta.env.VITE_RELAY_LINK_TESTNET_API_URL;
+
+
+export const WEB3_AUTH_CLIENT_ID = import.meta.env.VITE_WEB3_AUTH_CLIENT_ID;
 export const WEB3_AUTH_BASE_RPC_URL = import.meta.env.VITE_WEB3_AUTH_BASE_RPC_URL ;
-export const RELAY_API_BASE =  import.meta.env.VITE_RELAY_LINK_API_URL;
-export const RELAY_TESTNETS_API = import.meta.env.VITE_RELAY_LINK_TESTNETS_API_URL;
-export const BASE_CHAIN_ID = 84532; // Base Sepolia
-export const PREFERRED_CHAINS = ['base', 'ethereum', 'binance', 'polygon', 'arbitrum', 'optimism', 'solana', 'tron'];
-export const CUSTOM_CHAINS = [
-    {
-        id: 42161, // Arbitrum One
-        name: 'arbitrum',
-        displayName: 'Arbitrum One',
-        iconUrl: 'https://icons.llamao.fi/icons/chains/rsz_arbitrum.jpg',
-        depositEnabled: true,
-        vmType: 'evm',
-        disabled: false,
-        currency: {
-            symbol: 'ETH',
-            name: 'Ether',
-            decimals: 18,
-            address: '0x0000000000000000000000000000000000000000',
-            supportsBridging: false
-        },
-        erc20Currencies: [
-            {
-                symbol: 'USDC',
-                name: 'USD Coin',
-                decimals: 6,
-                address: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831',
-                supportsBridging: false
-            }
-        ]
-    },
-    {
-        id: 8002, // Polygon
-        name: 'polygon',
-        displayName: 'Polygon',
-        iconUrl: 'https://icons.llamao.fi/icons/chains/rsz_polygon.jpg',
-        depositEnabled: true,
-        vmType: 'evm',
-        disabled: false,
-        currency: {
-            symbol: 'POL',
-            name: 'Polygon',
-            decimals: 18,
-            address: '0x0000000000000000000000000000000000000000',
-            supportsBridging: false
-        },
-        erc20Currencies: [
-            {
-                symbol: 'USDC',
-                name: 'USD Coin',
-                decimals: 6,
-                address: '0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359',
-                supportsBridging: false
-            }
-        ]
-    },
-    {
-        id: 42170, // Arbitrum Nova
-        name: 'arbitrum-nova',
-        displayName: 'Arbitrum Nova',
-        iconUrl: 'https://icons.llamao.fi/icons/chains/rsz_arbitrum.jpg',
-        depositEnabled: true,
-        vmType: 'evm',
-        disabled: false,
-        currency: {
-            symbol: 'ETH',
-            name: 'Ether',
-            decimals: 18,
-            address: '0x0000000000000000000000000000000000000000',
-            supportsBridging: false
-        },
-        erc20Currencies: [
-            {
-                symbol: 'USDC',
-                name: 'USD Coin',
-                decimals: 6,
-                address: '0x750ba8b76187092B0D1E87E28daaf484d1b5273b',
-                supportsBridging: false
-            }
-        ]
-    },
-    {
-        id: 998, // Hyperliquid (Note: Actual chain ID may vary)
-        name: 'hyperliquid',
-        displayName: 'Hyperliquid',
-        iconUrl: 'https://hyperliquid.xyz/favicon.ico',
-        depositEnabled: true,
-        vmType: 'evm',
-        disabled: false,
-        currency: {
-            symbol: 'HYPE',
-            name: 'Hyperliquid',
-            decimals: 18,
-            address: '0x0000000000000000000000000000000000000000',
-            supportsBridging: false
-        },
-        erc20Currencies: [
-            {
-                symbol: 'USDC',
-                name: 'USD Coin',
-                decimals: 6,
-                address: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
-                supportsBridging: false
-            }
-        ]
-    },
-    {
-        id: 1116, // Core (ARC - Core Blockchain)
-        name: 'arc',
-        displayName: 'ARC',
-        iconUrl: 'https://icons.llamao.fi/icons/chains/rsz_core.jpg',
-        depositEnabled: true,
-        vmType: 'evm',
-        disabled: false,
-        currency:  {
-                symbol: 'USDC',
-                name: 'USD Coin',
-                decimals: 6,
-                address: '0xa4151B2B3e269645181dCcF2D426cE75fcbDeca9',
-                supportsBridging: false
-            },
-        erc20Currencies: [
-          
-        ]
-    }
+export const WEB3_AUTH_CONNECTION_ID_GOOGLE= import.meta.env.VITE_WEB3_AUTH_CONNECTION_ID_GOOGLE_DEV
+export const WEB3_AUTH_CONNECTION_ID_EMAIL_PASSWORDLESS= import.meta.env.VITE_WEB3_AUTH_CONNECTION_ID_EMAIL_PASSWORDLESS_DEV
+export const WEB3_AUTH_BUNDLER_CONFIG_URL= import.meta.env.VITE_WEB3_AUTH_BUNDLER_CONFIG_URL;
+export const WEB3_AUTH_BUNDLER_CONFIG_CHAIN_ID =import.meta.env.VITE_WEB3_AUTH_BUNDLER_CONFIG_CHAIN_ID;
+
+
+export const BASE_POOL_ADDRESS = import.meta.env.VITE_BASE_POOL_ADDRESS;
+export const USDC_ADDRESS = import.meta.env.VITE_USDC_ADDRESS
+export const BASE_CHAIN_ID =  import.meta.env.VITE_BASE_CHAIN_ID; // Base Sepolia
+export const SUPPORTED_CHAINS = [
+  {
+    chainName: "Ethereum Mainnet",
+    chainId: 1,
+    rpcUrl: "https://eth.llamarpc.com"
+  },
+  {
+    chainName: "Polygon Mainnet",
+    chainId: 137,
+    rpcUrl: "https://polygon-rpc.com"
+  },
+  {
+    chainName: "Base",
+    chainId: 8453,
+    rpcUrl: "https://mainnet.base.org"
+  },
+  {
+    chainName: "OP Mainnet",
+    chainId: 10,
+    rpcUrl: "https://mainnet.optimism.io"
+  },
+  {
+    chainName: "Arbitrum One",
+    chainId: 42161,
+    rpcUrl: "https://arb1.arbitrum.io/rpc"
+  },
+  {
+    chainName: "Avalanche C-Chain",
+    chainId: 43114,
+    rpcUrl: "https://api.avax.network/ext/bc/C/rpc"
+  },
+  {
+    chainName: "BNB Smart Chain Mainnet",
+    chainId: 56,
+    rpcUrl: "https://bsc-dataseed.binance.org"
+  },
+  {
+    chainName: "Monad Mainnet",
+    chainId: 41454,
+    rpcUrl: "https://rpc.monad.xyz"
+  },
+  {
+    chainName: "Mantle",
+    chainId: 5000,
+    rpcUrl: "https://rpc.mantle.xyz"
+  },
+  {
+    chainName: "Scroll",
+    chainId: 534352,
+    rpcUrl: "https://rpc.scroll.io"
+  }
 ];

@@ -4,11 +4,13 @@ import {
   WEB3AUTH_NETWORK,
   MFA_LEVELS,
   type Web3AuthOptions,
+  AUTH_CONNECTION,
 } from '@web3auth/modal'
-import { ETHEREUM_RPC_URL, WEB3_AUTH_BASE_RPC_URL, WEB3AUTH_CLIENT_ID } from '../constants/config'
+import {  WEB3_AUTH_CLIENT_ID, WEB3_AUTH_BUNDLER_CONFIG_URL, WEB3_AUTH_CONNECTION_ID_EMAIL_PASSWORDLESS, WEB3_AUTH_CONNECTION_ID_GOOGLE, WEB3_AUTH_BUNDLER_CONFIG_CHAIN_ID } from '../constants/config'
 
 const web3AuthOptions: Web3AuthOptions = {
-  clientId: WEB3AUTH_CLIENT_ID, // Pass your Web3Auth Client ID, ideally using an environment variable
+
+  clientId: WEB3_AUTH_CLIENT_ID,
   web3AuthNetwork: WEB3AUTH_NETWORK.SAPPHIRE_DEVNET,
   modalConfig: {
     connectors: {
@@ -17,6 +19,8 @@ const web3AuthOptions: Web3AuthOptions = {
         loginMethods: {
           google: {
             name: 'google login',
+            authConnection: AUTH_CONNECTION.GOOGLE,
+            authConnectionId:WEB3_AUTH_CONNECTION_ID_GOOGLE
             // logoDark: "url to your custom logo which will shown in dark mode",
           },
           facebook: {
@@ -26,7 +30,7 @@ const web3AuthOptions: Web3AuthOptions = {
           email_passwordless: {
             name: 'email passwordless login',
             showOnModal: true,
-            authConnectionId: 'future-city-aedz-2026',
+            authConnectionId:WEB3_AUTH_CONNECTION_ID_EMAIL_PASSWORDLESS
           }
         },
         showOnModal: true, // set to false to hide all social login methods
@@ -38,16 +42,9 @@ const web3AuthOptions: Web3AuthOptions = {
     smartAccountType: 'metamask',
     chains: [
       {
-        chainId: '0xaa36a7',
+        chainId: WEB3_AUTH_BUNDLER_CONFIG_CHAIN_ID,
         bundlerConfig: {
-          url: ETHEREUM_RPC_URL,
-        },
-
-      },
-      {
-        chainId: '0x14a34',
-        bundlerConfig: {
-          url: WEB3_AUTH_BASE_RPC_URL,
+          url: WEB3_AUTH_BUNDLER_CONFIG_URL,
         },
       },
     ],

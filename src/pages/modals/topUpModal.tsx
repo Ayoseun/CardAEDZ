@@ -10,8 +10,11 @@ import {
     ArrowRight,
     RefreshCw
 } from 'lucide-react';
-import { CUSTOM_CHAINS, PREFERRED_CHAINS, BASE_CHAIN_ID, RELAY_API_BASE, RELAY_TESTNETS_API, MOCK_USDC_ADDRESS } from '../../constants/config';
-import { baseSepolia, hyperliquidEvmTestnet, sepolia, tempoLocalnet } from 'viem/chains';
+import {
+    PublicKey,
+} from "@solana/web3.js";
+import { BASE_CHAIN_ID, RELAY_LINK_API_URL, SUPPORTED_CHAINS, USDC_ADDRESS, } from '../../constants/config';
+import {  mainnet,  bsc, base, polygon, optimism, arbitrum, avalanche, monad, mantle } from 'viem/chains';
 import { createPublicClient, formatEther, http } from 'viem';
 
 
@@ -21,8 +24,9 @@ export default function TopUpModal({
     mode = 'topup',
     address = '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb',
     kernelClient,
-    customChains = CUSTOM_CHAINS, // Add customChains prop
-    escrowService
+    escrowService,
+    connection,
+    solanaAddress,
 }: any) {
     const [amount, setAmount] = useState('');
     const [selectedWallet, setSelectedWallet] = useState('EVM');
@@ -38,7 +42,7 @@ export default function TopUpModal({
     const [isLoadingQuote, setIsLoadingQuote] = useState(false);
     const [walletBalance, setWalletBalance] = useState(0.00);
     // Chain and token data
-    const [chains, setChains] = useState([]);
+    const [chains, setChains]:any = useState([]);
     const [isLoadingChains, setIsLoadingChains] = useState(true);
     const [availableTokens, setAvailableTokens] = useState([]);
 
@@ -47,7 +51,7 @@ export default function TopUpModal({
     const needsBridge = (selectedChain !== 84532 || (selectedToken?.symbol?.toUpperCase() !== 'USDC'));
 
     const evmAddress = address;
-    const solanaAddress = 'Sol...';
+
 
     // Fetch chains from Relay API
     useEffect(() => {
@@ -80,26 +84,47 @@ export default function TopUpModal({
     useEffect(() => {
         if (!selectedToken || !escrowService) return;
         if (selectedToken.symbol
-            == 'ETH') {
+            == 'ETH' || selectedWallet == 'EVM') {
             console.log("Getting  chain:", selectedToken, selectedChain, selectedChainData)
             switch (selectedChain) {
-                case 11155111:
-                    getNativeBalance(sepolia, selectedChainData.httpRpcUrl);
+                case SUPPORTED_CHAINS[0].chainId:
+                    getNativeBalance(mainnet, selectedChainData.httpRpcUrl);
                     break;
-                case 84532:
-                    getNativeBalance(baseSepolia, selectedChainData.httpRpcUrl);
+                case SUPPORTED_CHAINS[2].chainId:
+                    getNativeBalance(base, selectedChainData.httpRpcUrl);
                     break;
-                case 42431:
-                    getNativeBalance(tempoLocalnet, selectedChainData.httpRpcUrl);
+                case SUPPORTED_CHAINS[1].chainId:
+                    getNativeBalance(polygon, selectedChainData.httpRpcUrl);
                     break;
-                case 1337:
-                    getNativeBalance(hyperliquidEvmTestnet, selectedChainData.httpRpcUrl);
+                case SUPPORTED_CHAINS[3].chainId:
+                    getNativeBalance(optimism, selectedChainData.httpRpcUrl);
+                    break;
+                case SUPPORTED_CHAINS[4].chainId:
+                    getNativeBalance(arbitrum, selectedChainData.httpRpcUrl);
+                    break;
+
+                case SUPPORTED_CHAINS[5].chainId:
+                    getNativeBalance(avalanche, selectedChainData.httpRpcUrl);
+                    break;
+                case SUPPORTED_CHAINS[6].chainId:
+                    getNativeBalance(bsc, selectedChainData.httpRpcUrl);
+                    break;
+                case SUPPORTED_CHAINS[7].chainId:
+                    getNativeBalance(monad, selectedChainData.httpRpcUrl);
+                    break;
+                case SUPPORTED_CHAINS[8].chainId:
+                    getNativeBalance(mantle, selectedChainData.httpRpcUrl);
+                    break;
+                case SUPPORTED_CHAINS[9].chainId:
+                    getNativeBalance(scroll, selectedChainData.httpRpcUrl);
                     break;
                 default:
                     //getNativeBalance(baseSepolia, selectedChainData.httpRpcUrl);
                     setWalletBalance(0.00);
                     break;
             }
+        } else if (selectedToken.symbol == 'SOL') {
+            fetchSolanaBalance(kernelClient?.solanaConnection, kernelClient?.solanaAccounts);
         } else {
             loadSelectedTokenBalance(selectedToken);
         }
@@ -107,6 +132,22 @@ export default function TopUpModal({
     }, [selectedToken]);
 
 
+    const fetchSolanaBalance = async (connection: any, accounts: any) => {
+        if (connection && accounts && accounts.length > 0) {
+            try {
+
+                const publicKey = new PublicKey(accounts[0]);
+                const balance = await connection.getBalance(publicKey);
+                setWalletBalance(balance);
+            } catch (err) {
+                console.error('Failed to fetch native balance:', err);
+                setWalletBalance(0);
+            } finally {
+                console.error('Failed to fetch native balance');
+                setWalletBalance(0);
+            }
+        }
+    };
 
     const getNativeBalance = async (
         chain: any,
@@ -138,82 +179,59 @@ export default function TopUpModal({
     };
 
 
-    const fetchChains = async () => {
-        setIsLoadingChains(true);
-        try {
-            const response = await fetch(`${RELAY_TESTNETS_API}/chains`);
-            const data = await response.json();
+const fetchChains = async () => {
+    setIsLoadingChains(true);
+    try {
+        const response = await fetch(`${RELAY_LINK_API_URL}/chains`);
+        const data = await response.json();
 
-            // Filter and sort chains by preference
-            const supportedChains = data.chains
-                .filter((chain: any) =>
-                    chain.depositEnabled &&
-                    chain.vmType === 'evm' &&
-                    !chain.disabled
-                )
-                .sort((a: any, b: any) => {
-                    const aIndex = PREFERRED_CHAINS.findIndex(p =>
-                        a.name.toLowerCase().includes(p) ||
-                        a.displayName.toLowerCase().includes(p)
-                    );
-                    const bIndex = PREFERRED_CHAINS.findIndex(p =>
-                        b.name.toLowerCase().includes(p) ||
-                        b.displayName.toLowerCase().includes(p)
-                    );
+        // Create a Set of supported chain IDs for quick lookup
+        const supportedChainIds = new Set(SUPPORTED_CHAINS.map(chain => chain.chainId));
 
-                    if (aIndex === -1 && bIndex === -1) return 0;
-                    if (aIndex === -1) return 1;
-                    if (bIndex === -1) return -1;
-                    return aIndex - bIndex;
-                });
-
-            // Merge custom chains with API chains
-            // Custom chains go at the end unless they match preferred chains
-            const mergedChains = [...supportedChains, ...customChains].reduce((acc, chain) => {
-                // Avoid duplicates based on chain ID
-                if (!acc.find((c: any) => c.id === chain.id)) {
-                    acc.push(chain);
-                }
-                return acc;
-            }, []);
-
-            // Re-sort after merging to respect PREFERRED_CHAINS order
-            const finalChains = mergedChains.sort((a: any, b: any) => {
-                const aIndex = PREFERRED_CHAINS.findIndex(p =>
-                    a.name.toLowerCase().includes(p) ||
-                    a.displayName.toLowerCase().includes(p)
-                );
-                const bIndex = PREFERRED_CHAINS.findIndex(p =>
-                    b.name.toLowerCase().includes(p) ||
-                    b.displayName.toLowerCase().includes(p)
-                );
-
-                if (aIndex === -1 && bIndex === -1) return 0;
-                if (aIndex === -1) return 1;
-                if (bIndex === -1) return -1;
+        // Filter chains to only include those in SUPPORTED_CHAINS
+        const filteredChains = data.chains
+            .filter((chain: any) => 
+                supportedChainIds.has(chain.id) &&
+                chain.depositEnabled &&
+                chain.vmType === 'evm' &&
+                !chain.disabled
+            )
+            .sort((a: any, b: any) => {
+                // Sort by the order they appear in SUPPORTED_CHAINS
+                const aIndex = SUPPORTED_CHAINS.findIndex(p => p.chainId === a.id);
+                const bIndex = SUPPORTED_CHAINS.findIndex(p => p.chainId === b.id);
                 return aIndex - bIndex;
             });
 
-            setChains(finalChains);
+        setChains(filteredChains);
 
-            // Set initial chain to Base Sepolia if available
-            const baseChain = finalChains.find((c: any) => c.id === BASE_CHAIN_ID);
-            if (baseChain) {
-                setSelectedChain(BASE_CHAIN_ID);
-            } else if (finalChains.length > 0) {
-                setSelectedChain(finalChains[0].id);
-            }
-        } catch (error) {
-            console.error('Error fetching chains:', error);
-            // If API fails, just use custom chains
-            setChains(customChains);
-            if (customChains.length > 0) {
-                setSelectedChain(customChains[0].id);
-            }
-        } finally {
-            setIsLoadingChains(false);
+        // Set initial chain to Base (chainId 8453) if available
+        const baseChain = filteredChains.find((c: any) => c.id === 8453);
+        if (baseChain) {
+            setSelectedChain(8453);
+        } else if (filteredChains.length > 0) {
+            // Otherwise, use the first supported chain
+            setSelectedChain(filteredChains[0].id);
         }
-    };
+    } catch (error) {
+        console.error('Error fetching chains:', error);
+        // If API fails, create fallback chains from SUPPORTED_CHAINS
+        const fallbackChains = SUPPORTED_CHAINS.map(chain => ({
+            id: chain.chainId,
+            name: chain.chainName.toLowerCase().replace(/\s+/g, '-'),
+            displayName: chain.chainName,
+            httpRpcUrl: chain.rpcUrl,
+            vmType: 'evm',
+            depositEnabled: true,
+            disabled: false
+        }));
+        setChains([fallbackChains]);
+        // Default to Base (8453) or first chain
+        setSelectedChain(fallbackChains.find(c => c.id === 8453)?.id || fallbackChains[0]?.id);
+    } finally {
+        setIsLoadingChains(false);
+    }
+};
 
     // Fetch Relay quote when amount, chain, or token changes (only for topup mode with bridge)
     useEffect(() => {
@@ -227,27 +245,22 @@ export default function TopUpModal({
         try {
             const amountInBaseUnits = (parseFloat(amount) * Math.pow(10, selectedToken.decimals)).toString();
 
-            const response = await fetch(`${RELAY_API_BASE}/quote`, {
+            const response = await fetch(`${RELAY_LINK_API_URL}/quote`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
                     user: address,
-                    // originChainId: selectedChain,
-                    // destinationChainId: BASE_CHAIN_ID,
-                    // originCurrency: selectedToken.address,
-                    // destinationCurrency: MOCK_USDC_ADDRESS,
-                    // amount: amountInBaseUnits,
-                    // tradeType: 'EXACT_INPUT'
+                    originChainId: selectedChain,
+                    destinationChainId: BASE_CHAIN_ID,
+                    originCurrency: selectedToken.address,
+                    destinationCurrency: USDC_ADDRESS,
+                    amount: amountInBaseUnits,
+                    tradeType: 'EXACT_INPUT'
 
 
-                    "originChainId": 10,
-                    "destinationChainId": 8453,
-                    "originCurrency": "0x0000000000000000000000000000000000000000",
-                    "destinationCurrency": "0x0000000000000000000000000000000000000000",
-                    "amount": "10000000000000000000",
-                    "tradeType": "EXACT_INPUT"
+                   
                 })
             });
 
@@ -314,7 +327,7 @@ export default function TopUpModal({
         const checkStatus = async () => {
             try {
                 const response = await fetch(
-                    `${RELAY_API_BASE}/intents/status/v3?requestId=${reqId}`
+                    `${RELAY_LINK_API_URL}/intents/status/v3?requestId=${reqId}`
                 );
                 const status = await response.json();
 

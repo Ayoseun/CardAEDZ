@@ -8,11 +8,11 @@ import {
     useWeb3AuthDisconnect,
     useWeb3AuthUser,
 } from "@web3auth/modal/react";
-
+import { useSolanaWallet } from "@web3auth/modal/react/solana";
 import { createPublicClient, http } from 'viem';
 import { baseSepolia } from 'viem/chains';
 import { EscrowService } from '../constants/escrowContract';
-import { ZERO_DEV_RPC_URL, ZERO_DEV_PASSKEY_SERVER_URL, MOCK_USDC_ADDRESS } from '../constants/config';
+import { ZERO_DEV_RPC_URL, ZERO_DEV_PASSKEY_SERVER_URL, USDC_ADDRESS } from '../constants/config';
 import { LoginScreen } from './login';
 import { WithdrawModal } from './modals/withdrawal';
 import { mockTransactions, type Transaction, type User } from '../utils/types';
@@ -70,7 +70,7 @@ export default function Dashboard() {
     const { connect, isConnected } = useWeb3AuthConnect();
     const { disconnect } = useWeb3AuthDisconnect();
     const { userInfo } = useWeb3AuthUser();
-
+    const { accounts, connection } = useSolanaWallet();
     const publicClient = createPublicClient({
         transport: http(ZERO_DEV_RPC_URL),
         chain: CHAIN,
@@ -80,6 +80,7 @@ export default function Dashboard() {
 
         if (isConnected && userInfo && !loginAttemptedRef.current) {
             setIsAuthenticated(true);
+            console.log(userInfo);
             setUser({
                 name: userInfo.name || 'User',
                 email: userInfo.email || '',
@@ -87,7 +88,7 @@ export default function Dashboard() {
                 avatar: userInfo.profileImage || ''
             } as any);
 
-            const hasPasskey = localStorage.getItem(`passkey_created_${"userInfo.email"}`);
+            const hasPasskey = localStorage.getItem(`passkey_created_${userInfo.email || kernelAccount?.address}`);
             if (hasPasskey === 'true') {
                 setPasskeyCreated(true);
                 loginAttemptedRef.current = true;
@@ -103,8 +104,11 @@ export default function Dashboard() {
         console.log("Creating passkey wallet...");
         setIsCreatingPasskey(true);
         try {
+            // Use email if available, otherwise fallback to kernel account address
+            const passkeyName = userInfo?.email || kernelAccount?.address || 'cardaedz-user';
+
             const webAuthnKey = await toWebAuthnKey({
-                passkeyName: "userInfo.email",
+                passkeyName: passkeyName,
                 passkeyServerUrl: ZERO_DEV_PASSKEY_SERVER_URL,
                 mode: WebAuthnMode.Register,
                 passkeyServerHeaders: {}
@@ -146,7 +150,8 @@ export default function Dashboard() {
             const service = new EscrowService(kernelClient, account.address, paymasterClient, entryPoint);
             setEscrowService(service);
 
-            localStorage.setItem(`passkey_created_${"userInfo.email"}`, 'true');
+
+            localStorage.setItem(`passkey_created_${userInfo?.email || kernelAccount?.address}`, 'true');
             setPasskeyCreated(true);
 
             await loadBalances(service);
@@ -166,13 +171,16 @@ export default function Dashboard() {
         console.log("Logging in with existing passkey...");
         setIsLoading(true);
         try {
+
+            // Use email if available, otherwise fallback to kernel account address
+            const passkeyName = userInfo?.email || kernelAccount?.address || 'default-user';
+
             const webAuthnKey = await toWebAuthnKey({
-                passkeyName: "userInfo.email",
+                passkeyName: passkeyName,
                 passkeyServerUrl: ZERO_DEV_PASSKEY_SERVER_URL,
                 mode: WebAuthnMode.Login,
                 passkeyServerHeaders: {}
             });
-
             const passkeyValidator = await toPasskeyValidator(publicClient, {
                 webAuthnKey,
                 entryPoint,
@@ -223,9 +231,9 @@ export default function Dashboard() {
 
         try {
 
-          
 
-            const tokenAddress = MOCK_USDC_ADDRESS;
+
+            const tokenAddress = USDC_ADDRESS;
             const balance = await svc.getEscrowBalance(tokenAddress);
             setCardBalance(parseFloat(balance));
 
@@ -270,7 +278,7 @@ export default function Dashboard() {
         ]);
 
         try {
-            const tokenAddress = MOCK_USDC_ADDRESS;
+            const tokenAddress = USDC_ADDRESS;
 
             // Report spend to smart contract
             const receipt = await escrowService.reportSpend(tokenAddress, HARDCODED_SPEND_AMOUNT);
@@ -347,6 +355,7 @@ export default function Dashboard() {
                         <p className="text-gray-600">
                             Secure your funds with a passkey - no seed phrases needed!
                         </p>
+                        <div>{accounts?.[0]}</div>
                     </div>
 
                     <div className="space-y-4 mb-6">
@@ -596,6 +605,8 @@ export default function Dashboard() {
                     mode="fund"
                     address={kernelAccount.address}
                     escrowService={escrowService}
+                    connection={connection}
+                    solanaAddress={accounts?.[0]}
 
                 />
             )}
@@ -607,6 +618,8 @@ export default function Dashboard() {
                     address={kernelAccount.address}
                     escrowService={escrowService}
                     kernelClient={kernelClient}
+                    connection={connection}
+                    solanaAddress={accounts?.[0]}
                     onDeposit={async (amount: any, network: any) => {
                         const txId = Date.now().toString();
                         setTransactions([
@@ -624,7 +637,7 @@ export default function Dashboard() {
 
                         try {
                             if (escrowService) {
-                                const tokenAddress = MOCK_USDC_ADDRESS;
+                                const tokenAddress = USDC_ADDRESS;
                                 const receipt = await escrowService.depositToEscrow(tokenAddress, amount, 0, 0);
 
                                 setTransactions(prev =>

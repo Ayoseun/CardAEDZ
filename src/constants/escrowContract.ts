@@ -1,7 +1,7 @@
 // src/constants/escrowContract.ts
 import { createPublicClient, http, parseUnits, formatUnits, type Address } from 'viem';
 import { baseSepolia } from 'viem/chains';
-import { BASE_POOL_ADDRESS, BASE_RPC_URL, MOCK_USDC_ADDRESS } from './config';
+import { BASE_POOL_ADDRESS, USDC_ADDRESS, WEB3_AUTH_BASE_RPC_URL } from './config';
 import {
 
 
@@ -164,7 +164,7 @@ const ERC20_ABI = [
 
 export const CONTRACTS = {
     escrow: BASE_POOL_ADDRESS as Address,
-    usdc: MOCK_USDC_ADDRESS as Address,
+    usdc: USDC_ADDRESS as Address,
 };
 
 export class EscrowService {
@@ -179,7 +179,7 @@ export class EscrowService {
         this.address = userAddress;
         this.publicClient = createPublicClient({
             chain: baseSepolia,
-            transport: http(BASE_RPC_URL)
+            transport: http(WEB3_AUTH_BASE_RPC_URL)
         });
         this.paymasterClient = paymasterClient
         this.entryPoint = entryPoint
