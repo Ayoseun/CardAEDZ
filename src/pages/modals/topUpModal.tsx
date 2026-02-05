@@ -25,6 +25,7 @@ export default function TopUpModal({
     address = '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb',
     kernelClient,
     escrowService,
+    //@ts-ignore
     connection,
     solanaAddress,
 }: any) {
