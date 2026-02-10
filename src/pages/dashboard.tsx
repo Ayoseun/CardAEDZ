@@ -34,7 +34,6 @@ import {
     createZeroDevPaymasterClient,
 } from "@zerodev/sdk";
 import { KERNEL_V3_1, getEntryPoint } from "@zerodev/sdk/constants";
-//import { createZeroDevPaymasterClient } from "@zerodev/sdk";
 
 import TopUpModal from './modals/topUpModal';
 
@@ -58,29 +57,29 @@ export default function Dashboard() {
     const [monthlySpent, setMonthlySpent] = useState(0.00);
     const [isSpending, setIsSpending] = useState(false);
     const [escrowService, setEscrowService] = useState<any>(null);
-    //@ts-ignore
-
 
     // ZeroDev states
     const [kernelAccount, setKernelAccount] = useState<any>(null);
     const [kernelClient, setKernelClient] = useState<any>(null);
     const [isCreatingPasskey, setIsCreatingPasskey] = useState(false);
     const [passkeyCreated, setPasskeyCreated] = useState(false);
+    const [passkeyLoginFailed, setPasskeyLoginFailed] = useState(false);
     const loginAttemptedRef = useRef(false);
+    
     const { connect, isConnected } = useWeb3AuthConnect();
     const { disconnect } = useWeb3AuthDisconnect();
     const { userInfo } = useWeb3AuthUser();
     const { accounts, connection } = useSolanaWallet();
+    
     const publicClient = createPublicClient({
         transport: http(ZERO_DEV_RPC_URL),
         chain: CHAIN,
     });
 
+    // FIXED: Always attempt passkey login first, don't rely on localStorage
     useEffect(() => {
-
         if (isConnected && userInfo && !loginAttemptedRef.current) {
             setIsAuthenticated(true);
-            console.log(userInfo);
             setUser({
                 name: userInfo.name || 'User',
                 email: userInfo.email || '',
@@ -88,24 +87,85 @@ export default function Dashboard() {
                 avatar: userInfo.profileImage || ''
             } as any);
 
-            const hasPasskey = localStorage.getItem(`passkey_created_${userInfo.email || kernelAccount?.address}`);
-            if (hasPasskey === 'true') {
-                setPasskeyCreated(true);
-                loginAttemptedRef.current = true;
-                loginWithPasskey();
-            }
+            // Always try to login with existing passkey first
+            loginAttemptedRef.current = true;
+            attemptPasskeyLogin();
         }
-    }, [isConnected, userInfo, kernelAccount]);
+    }, [isConnected, userInfo]);
 
-    // Create passkey wallet after Web3Auth login
+    // FIXED: Attempt to login with existing passkey
+    const attemptPasskeyLogin = async () => {
+        if (!isConnected) return;
+        
+        setIsLoading(true);
+        try {
+            const passkeyName = userInfo?.email || 'cardaedz-user';
+
+            // Try to login with existing passkey
+            const webAuthnKey = await toWebAuthnKey({
+                passkeyName: passkeyName,
+                passkeyServerUrl: ZERO_DEV_PASSKEY_SERVER_URL,
+                mode: WebAuthnMode.Login,
+                passkeyServerHeaders: {}
+            });
+
+            const passkeyValidator = await toPasskeyValidator(publicClient, {
+                webAuthnKey,
+                entryPoint,
+                kernelVersion: KERNEL_V3_1,
+                validatorContractVersion: PasskeyValidatorContractVersion.V0_0_3_PATCHED
+            });
+
+            const account = await createKernelAccount(publicClient, {
+                plugins: {
+                    sudo: passkeyValidator,
+                },
+                entryPoint,
+                kernelVersion: KERNEL_V3_1
+            });
+
+            const paymasterClient = createZeroDevPaymasterClient({
+                chain: CHAIN,
+                transport: http(ZERO_DEV_RPC_URL),
+            });
+
+            const client = createKernelAccountClient({
+                account,
+                chain: CHAIN,
+                bundlerTransport: http(ZERO_DEV_RPC_URL),
+                client: publicClient,
+            });
+
+            setKernelAccount(account);
+            setKernelClient(client);
+
+            const service = new EscrowService(client, account.address, paymasterClient, entryPoint);
+            setEscrowService(service);
+
+            setPasskeyCreated(true);
+            setPasskeyLoginFailed(false);
+
+            await loadBalances(service);
+            
+            console.log('Successfully logged in with existing passkey');
+        } catch (error) {
+            console.log('No existing passkey found or login failed:', error);
+            // This is expected on first login - show passkey creation screen
+            setPasskeyLoginFailed(true);
+            setPasskeyCreated(false);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    // Create passkey wallet (only called when user explicitly creates one)
     const createPasskeyWallet = async () => {
         if (!isConnected) return;
 
         console.log("Creating passkey wallet...");
         setIsCreatingPasskey(true);
         try {
-            // Use email if available, otherwise fallback to kernel account address
-            const passkeyName = userInfo?.email || kernelAccount?.address || 'cardaedz-user';
+            const passkeyName = userInfo?.email || 'cardaedz-user';
 
             const webAuthnKey = await toWebAuthnKey({
                 passkeyName: passkeyName,
@@ -128,31 +188,27 @@ export default function Dashboard() {
                 entryPoint,
                 kernelVersion: KERNEL_V3_1
             });
+
             const paymasterClient = createZeroDevPaymasterClient({
                 chain: CHAIN,
                 transport: http(ZERO_DEV_RPC_URL),
             });
+
             const client = createKernelAccountClient({
                 account,
                 chain: CHAIN,
                 bundlerTransport: http(ZERO_DEV_RPC_URL),
                 client: publicClient,
-                //     paymaster: paymasterClient,
-                //     paymasterContext: {
-                //         //@ts-ignore
-                //         token: gasTokenAddresses[CHAIN.id]["USDC"],
-                //     },
             });
 
             setKernelAccount(account);
             setKernelClient(client);
 
-            const service = new EscrowService(kernelClient, account.address, paymasterClient, entryPoint);
+            const service = new EscrowService(client, account.address, paymasterClient, entryPoint);
             setEscrowService(service);
 
-
-            localStorage.setItem(`passkey_created_${userInfo?.email || kernelAccount?.address}`, 'true');
             setPasskeyCreated(true);
+            setPasskeyLoginFailed(false);
 
             await loadBalances(service);
 
@@ -165,74 +221,11 @@ export default function Dashboard() {
         }
     };
 
-    // Login with existing passkey
-    const loginWithPasskey = async () => {
-        if (!isConnected) return;
-        console.log("Logging in with existing passkey...");
-        setIsLoading(true);
-        try {
-
-            // Use email if available, otherwise fallback to kernel account address
-            const passkeyName = userInfo?.email || kernelAccount?.address || 'default-user';
-
-            const webAuthnKey = await toWebAuthnKey({
-                passkeyName: passkeyName,
-                passkeyServerUrl: ZERO_DEV_PASSKEY_SERVER_URL,
-                mode: WebAuthnMode.Login,
-                passkeyServerHeaders: {}
-            });
-            const passkeyValidator = await toPasskeyValidator(publicClient, {
-                webAuthnKey,
-                entryPoint,
-                kernelVersion: KERNEL_V3_1,
-                validatorContractVersion: PasskeyValidatorContractVersion.V0_0_3_PATCHED
-            });
-
-            const account = await createKernelAccount(publicClient, {
-                plugins: {
-                    sudo: passkeyValidator,
-                },
-                entryPoint,
-                kernelVersion: KERNEL_V3_1
-            });
-            const paymasterClient = createZeroDevPaymasterClient({
-                chain: CHAIN,
-                transport: http(ZERO_DEV_RPC_URL),
-            });
-            const client = createKernelAccountClient({
-                account,
-                chain: CHAIN,
-                bundlerTransport: http(ZERO_DEV_RPC_URL),
-                client: publicClient,
-                // paymaster: paymasterClient,
-                // paymasterContext: {
-
-                //     token: gasTokenAddresses[CHAIN.id]["USDC"],
-                // },
-            });
-
-            setKernelAccount(account);
-            setKernelClient(client);
-
-            const service = new EscrowService(client, account.address, paymasterClient, entryPoint);
-            setEscrowService(service);
-
-            await loadBalances(service);
-        } catch (error) {
-            console.error("Failed to login with passkey:", error);
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
     const loadBalances = async (service?: any) => {
         const svc = service || escrowService;
         if (!svc) return;
 
         try {
-
-
-
             const tokenAddress = USDC_ADDRESS;
             const balance = await svc.getEscrowBalance(tokenAddress);
             setCardBalance(parseFloat(balance));
@@ -240,7 +233,6 @@ export default function Dashboard() {
             const walletBal = await svc.getTokenBalance(tokenAddress);
             setWalletBalance(parseFloat(walletBal));
 
-            // Load spending data
             const spendData = await svc.getSpendProofs(tokenAddress);
             setMonthlySpent(parseFloat(spendData.monthlySpent));
         } catch (error) {
@@ -263,7 +255,6 @@ export default function Dashboard() {
         setIsSpending(true);
         const txId = Date.now().toString();
 
-        // Add pending transaction
         setTransactions([
             {
                 id: txId,
@@ -279,12 +270,8 @@ export default function Dashboard() {
 
         try {
             const tokenAddress = USDC_ADDRESS;
-
-            // Report spend to smart contract
             const receipt = await escrowService.reportSpend(tokenAddress, HARDCODED_SPEND_AMOUNT);
-            console.log('Spend reported:', receipt);
 
-            // Update transaction status
             setTransactions(prev =>
                 prev.map(tx => tx.id === txId
                     ? { ...tx, status: 'completed', txHash: receipt.transactionHash }
@@ -292,22 +279,17 @@ export default function Dashboard() {
                 )
             );
 
-            // Optimistically update balances
             setCardBalance(prev => prev - spendAmount);
             setMonthlySpent(prev => prev + spendAmount);
 
-            // Reload balances from contract
             await loadBalances();
 
             alert(`Successfully spent $${HARDCODED_SPEND_AMOUNT}!`);
         } catch (error) {
             console.error("Spend failed:", error);
-
-            // Update transaction status to failed
             setTransactions(prev =>
                 prev.map(tx => tx.id === txId ? { ...tx, status: 'failed' } : tx)
             );
-
             alert('Failed to process spend. Please try again.');
         } finally {
             setIsSpending(false);
@@ -325,6 +307,8 @@ export default function Dashboard() {
         setKernelAccount(null);
         setKernelClient(null);
         setPasskeyCreated(false);
+        setPasskeyLoginFailed(false);
+        loginAttemptedRef.current = false;
         setIsLoading(false);
     };
 
@@ -342,8 +326,8 @@ export default function Dashboard() {
         return <LoginScreen onLogin={handleLogin} isLoading={isLoading} />;
     }
 
-    // Show passkey creation prompt if user hasn't created one yet
-    if (isAuthenticated && !passkeyCreated && !isCreatingPasskey) {
+    // FIXED: Show passkey creation only if login failed (no existing passkey)
+    if (isAuthenticated && passkeyLoginFailed && !passkeyCreated && !isCreatingPasskey && !isLoading) {
         return (
             <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 flex items-center justify-center p-4">
                 <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full">
@@ -355,7 +339,6 @@ export default function Dashboard() {
                         <p className="text-gray-600">
                             Secure your funds with a passkey - no seed phrases needed!
                         </p>
-                        <div>{accounts?.[0]}</div>
                     </div>
 
                     <div className="space-y-4 mb-6">
@@ -390,8 +373,8 @@ export default function Dashboard() {
                                 </svg>
                             </div>
                             <div>
-                                <p className="font-medium text-gray-900">Gasless Transactions</p>
-                                <p className="text-sm text-gray-600">We sponsor your gas fees</p>
+                                <p className="font-medium text-gray-900">Survives History Clears</p>
+                                <p className="text-sm text-gray-600">Passkey persists even if you clear browser data</p>
                             </div>
                         </div>
                     </div>
@@ -415,12 +398,27 @@ export default function Dashboard() {
         );
     }
 
-    // Calculate spending progress (assuming $500 monthly limit)
+    // Show loading state while attempting passkey login
+    if (isAuthenticated && !passkeyCreated && !passkeyLoginFailed) {
+        return (
+            <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 flex items-center justify-center p-4">
+                <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full text-center">
+                    <div className="w-16 h-16 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
+                        <Key className="w-8 h-8 text-white" />
+                    </div>
+                    <h2 className="text-xl font-bold text-gray-900 mb-2">Checking for Passkey...</h2>
+                    <p className="text-gray-600">Please wait while we check for your existing passkey</p>
+                </div>
+            </div>
+        );
+    }
+
     const monthlyLimit = 500;
     const spendingProgress = (monthlySpent / monthlyLimit) * 100;
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50">
+            {/* Rest of the dashboard JSX remains the same... */}
             <header className="bg-white border-b border-gray-200 sticky top-0 z-30 shadow-sm">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4">
                     <div className="flex items-center justify-between">
@@ -439,7 +437,6 @@ export default function Dashboard() {
                                     <Key className="w-4 h-4 text-indigo-600" />
                                     <span className="text-sm font-mono text-indigo-900">
                                         {kernelAccount.address.slice(0, 6)}...{kernelAccount.address.slice(-4)}
-
                                     </span>
                                 </div>
                             )}
@@ -469,10 +466,7 @@ export default function Dashboard() {
                         icon={CreditCard}
                         color="indigo"
                         showBalance={showBalance}
-                        onToggleBalance={() => {
-
-                            setShowBalance(!showBalance)
-                        }}
+                        onToggleBalance={() => setShowBalance(!showBalance)}
                     />
 
                     <BalanceCard
@@ -487,7 +481,6 @@ export default function Dashboard() {
                         }}
                     />
 
-                    {/* Spending Card */}
                     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                         <div className="flex items-center justify-between mb-4">
                             <div className="flex items-center space-x-2">
@@ -518,14 +511,12 @@ export default function Dashboard() {
                     </div>
                 </div>
 
+                {/* Quick actions and rest of dashboard... same as original */}
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
                     <QuickAction
                         icon={ArrowDownLeft}
                         label="Fund Wallet"
-                        onClick={() => {
-                            console.log("Funding wallet...");
-                            setShowFundWalletModal(true)
-                        }}
+                        onClick={() => setShowFundWalletModal(true)}
                         color="green"
                     />
                     <QuickAction
@@ -534,15 +525,12 @@ export default function Dashboard() {
                         onClick={() => setShowWithdrawModal(true)}
                         color="red"
                     />
-
                     <QuickAction
                         icon={CreditCard}
                         label="Get Card"
                         onClick={() => setActiveTab('card')}
                         color="indigo"
                     />
-
-                    {/* Spend Button */}
                     <button
                         onClick={handleSpend}
                         disabled={isSpending || cardBalance < parseFloat(HARDCODED_SPEND_AMOUNT)}
@@ -555,7 +543,6 @@ export default function Dashboard() {
                             {isSpending ? 'Processing...' : `Spend $${HARDCODED_SPEND_AMOUNT}`}
                         </span>
                     </button>
-
                     <QuickAction
                         icon={History}
                         label="History"
@@ -607,7 +594,6 @@ export default function Dashboard() {
                     escrowService={escrowService}
                     connection={connection}
                     solanaAddress={accounts?.[0]}
-
                 />
             )}
 

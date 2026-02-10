@@ -2,6 +2,7 @@
 import { BrowserRouter as Router, Routes, Route, } from 'react-router-dom';
 import LandingPage from './pages/home';
 import Dashboard from './pages/dashboard';
+import { FApp } from './future-city/app';
 
 export default function App() {
 
@@ -12,6 +13,7 @@ export default function App() {
         <Routes> {/* Define your routes here */}
           <Route path="/" element={<LandingPage/>} />
           <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/fapp" element={<FApp />} />
 
         </Routes>
       </>
