@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { WagmiProvider, createConfig, http, useAccount, useConnect, useDisconnect, useSwitchChain, useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
-import { base, baseSepolia } from 'wagmi/chains';
+import {  baseSepolia } from 'wagmi/chains';
 import { injected, walletConnect } from 'wagmi/connectors';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { formatUnits, parseUnits } from 'viem';
