@@ -8,7 +8,8 @@ import {
     Check,
     QrCode,
     ArrowRight,
-    RefreshCw
+    RefreshCw,
+    AlertTriangle
 } from 'lucide-react';
 import {
     PublicKey,
@@ -49,6 +50,7 @@ export default function TopUpModal({
     const [step, setStep] = useState('input');
     const [copiedAddress, setCopiedAddress] = useState(false);
     const [relayQuote, setRelayQuote]: any = useState({});
+    const [recievingAmount, setRecievingAmount]: any = useState({});
     const [bridgeStatus, setBridgeStatus] = useState('');
     const [requestId, setRequestId] = useState('');
     const [estimatedFees, setEstimatedFees]: any = useState(null);
@@ -469,7 +471,7 @@ export default function TopUpModal({
 
     const fetchRelayQuote = async () => {
         setIsLoadingQuote(true);
-        console.log("chain", BASE_CHAIN_ID, selectedChain)
+        console.log("chain", selectedToken)
         try {
             const amountInBaseUnits = (
                 parseFloat(amount) * Math.pow(10, selectedToken.decimals)
@@ -484,7 +486,7 @@ export default function TopUpModal({
                     "user": address,
                     "originChainId": selectedChain,
                     "destinationChainId": BASE_CHAIN_ID,
-                    "originCurrency": "0x0000000000000000000000000000000000000000",
+                    "originCurrency": selectedToken.address,
                     "destinationCurrency": USDC_ADDRESS,
                     "amount": amountInBaseUnits,
                     "tradeType": "EXACT_INPUT"
@@ -499,6 +501,10 @@ export default function TopUpModal({
             const quote = await response.json();
             setRelayQuote(quote);
             setEstimatedFees(quote.fees);
+            console.log("quote", quote)
+            const receive= parseFloat(quote.fees.relayer.amountUsd) + parseFloat(quote.fees.relayerGas.amountUsd) + parseFloat(quote.fees.relayerService.amountUsd)
+            const willGet= parseFloat(quote.details.currencyOut.amountUsd) - receive
+            setRecievingAmount(willGet)
         } catch (error) {
             console.error('Error fetching Relay quote:', error);
             setEstimatedFees(null);
@@ -704,7 +710,7 @@ export default function TopUpModal({
                                             </p>
                                             <p className="text-xs text-blue-700 mt-1">
                                                 Bridging from {selectedChainData?.displayName} to Base
-                                            </p>
+                                            </p> 
                                         </div>
                                     </div>
 
@@ -725,10 +731,21 @@ export default function TopUpModal({
                                             </div>
                                             <div className="flex justify-between text-xs font-semibold text-blue-900 pt-1 border-t border-blue-200">
                                                 <span>You'll receive:</span>
-                                                <span>~${(parseFloat(amount) - parseFloat(estimatedFees.gas?.amountUsd || '0') - parseFloat(estimatedFees.relayer?.amountUsd || '0')).toFixed(2)}</span>
+                                                <span>
+                                                    ~$
+                                                    {recievingAmount != null
+                                                        ? recievingAmount.toFixed(2)
+                                                        : '0.00'}
+                                                </span>
                                             </div>
+
                                         </div>
-                                    ) : null}
+                                    ) :  <div className="mt-2 pt-2 border-t border-blue-200 text-xs text-red-600 flex items-start space-x-2">
+        <AlertTriangle className="w-4 h-4 mt-0.5" />
+        <span>
+            Route not found or bridging service is currently unavailable.
+        </span>
+    </div>}
                                 </div>
                             )}
 

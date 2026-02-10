@@ -124,24 +124,3 @@ export const SUPPORTED_CHAINS_TESTNET = [
   }
 ];
 
-// Alternative/Additional Testnet Options
-export const ALTERNATIVE_TESTNETS = [
-  // Ethereum alternatives
-  {
-    chainName: "Holesky Testnet",
-    chainId: 17000,
-    rpcUrl: "https://ethereum-holesky-rpc.publicnode.com"
-  },
-  {
-    chainName: "Goerli Testnet (Deprecated)",
-    chainId: 5,
-    rpcUrl: "https://goerli.infura.io/v3/YOUR_INFURA_KEY"
-  },
-  
-  // Polygon alternatives
-  {
-    chainName: "Polygon Mumbai (Deprecated)",
-    chainId: 80001,
-    rpcUrl: "https://rpc-mumbai.maticvigil.com"
-  },
-];
