@@ -14,8 +14,8 @@ import {
 import {
     PublicKey,
 } from "@solana/web3.js";
-import { BASE_CHAIN_ID, RELAY_LINK_API_URL, SUPPORTED_CHAINS_TESTNET, SUPPORTED_CHAINS_MAINNET, USDC_ADDRESS, } from '../../constants/config';
-import { mainnet, bsc, base, polygon, optimism, arbitrum, avalanche, monad, mantle, sepolia, baseSepolia, scroll } from 'viem/chains';
+import { BASE_CHAIN_ID, RELAY_LINK_API_URL,  SUPPORTED_CHAINS_MAINNET, USDC_ADDRESS, } from '../../constants/config';
+import { mainnet, bsc, base, polygon, optimism, arbitrum, avalanche, monad, mantle, scroll } from 'viem/chains';
 import { createPublicClient, formatEther, http } from 'viem';
 
 
@@ -25,7 +25,9 @@ export default function TopUpModal({
     mode = 'topup',
     address = '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb',
     kernelClient,
+    //@ts-ignore
     escrowService,
+    //@ts-ignore
     connection,
     solanaAddress,
 }: any) {
@@ -43,6 +45,7 @@ export default function TopUpModal({
     const scrollNetwork = scroll;
 
     const [amount, setAmount] = useState('');
+    //@ts-ignore
     const [selectedWallet, setSelectedWallet] = useState('EVM');
     const [selectedChain, setSelectedChain]: any = useState(BASE_CHAIN_ID);
     const [selectedToken, setSelectedToken]: any = useState(null);
@@ -225,6 +228,7 @@ export default function TopUpModal({
         }
     };
 
+    //@ts-ignore
     const fetchSolanaBalance = async (connection: any, accounts: any) => {
         if (connection && accounts && accounts.length > 0) {
             try {
