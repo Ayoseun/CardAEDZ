@@ -50,6 +50,7 @@ export default function TopUpModal({
     const [step, setStep] = useState('input');
     const [copiedAddress, setCopiedAddress] = useState(false);
     const [relayQuote, setRelayQuote]: any = useState({});
+     const [errorMessage, setErrorMessage]: any = useState({});
     const [recievingAmount, setRecievingAmount]: any = useState({});
     const [bridgeStatus, setBridgeStatus] = useState('');
     const [requestId, setRequestId] = useState('');
@@ -64,7 +65,7 @@ export default function TopUpModal({
 
     const isTopUpMode = mode === 'topup';
     const isFundMode = mode === 'fund';
-    const needsBridge = (selectedChain !== 84532 || (selectedToken?.symbol?.toUpperCase() !== 'USDC'));
+    const needsBridge = (selectedChain !== 8453 || (selectedToken?.symbol?.toUpperCase() !== 'USDC'));
 
     const evmAddress = address;
 
@@ -502,12 +503,13 @@ export default function TopUpModal({
             setRelayQuote(quote);
             setEstimatedFees(quote.fees);
             console.log("quote", quote)
-            const receive= parseFloat(quote.fees.relayer.amountUsd) + parseFloat(quote.fees.relayerGas.amountUsd) + parseFloat(quote.fees.relayerService.amountUsd)
-            const willGet= parseFloat(quote.details.currencyOut.amountUsd) - receive
+            const receive = parseFloat(quote.fees.relayer.amountUsd) + parseFloat(quote.fees.relayerGas.amountUsd) + parseFloat(quote.fees.relayerService.amountUsd)
+            const willGet = parseFloat(quote.details.currencyOut.amountUsd) - receive
             setRecievingAmount(willGet)
-        } catch (error) {
+        } catch (error:any) {
             console.error('Error fetching Relay quote:', error);
             setEstimatedFees(null);
+            setErrorMessage(error.message);
         } finally {
             setIsLoadingQuote(false);
         }
@@ -710,7 +712,7 @@ export default function TopUpModal({
                                             </p>
                                             <p className="text-xs text-blue-700 mt-1">
                                                 Bridging from {selectedChainData?.displayName} to Base
-                                            </p> 
+                                            </p>
                                         </div>
                                     </div>
 
@@ -740,12 +742,10 @@ export default function TopUpModal({
                                             </div>
 
                                         </div>
-                                    ) :  <div className="mt-2 pt-2 border-t border-blue-200 text-xs text-red-600 flex items-start space-x-2">
-        <AlertTriangle className="w-4 h-4 mt-0.5" />
-        <span>
-            Route not found or bridging service is currently unavailable.
-        </span>
-    </div>}
+                                    ) : <div className="mt-2 pt-2 border-t border-blue-200 text-xs text-red-600 flex items-start space-x-2">
+                                        <AlertTriangle className="w-4 h-4 mt-0.5" />
+                                        <span>{errorMessage.toString()}</span>
+                                    </div>}
                                 </div>
                             )}
 
