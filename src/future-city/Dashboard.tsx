@@ -4,7 +4,7 @@ import { Wallet, Send, RefreshCw, Info, LogOut, Copy, Check } from 'lucide-react
 
 interface User {
   email?: string;
-  token?: string;
+  accessToken?: string;
 }
 
 interface Balances {
@@ -14,16 +14,22 @@ interface Balances {
   fcc: string;
 }
 
+interface Addresses {
+  fcvAtaAddress: string;
+  fccAtaAddress: string;
+}
+
 interface DashboardProps {
   user: User | null;
   walletAddress: string;
   isConnected: boolean;
   balances: Balances;
+  addresses: Addresses;
   onConnectWallet: () => void;
-  onTransferAEDZ: (amount: string) => Promise<void>;
-  onConvertToFCV: (amount: string) => Promise<void>;
+  onDepositAndConvert: (amount: string) => Promise<void>;
+  onTransferFCV: (recipientAddress: string, amount: string) => Promise<void>;
   onLogout: () => void;
-  isTransacting?: boolean; // Add this prop
+  isTransacting?: boolean;
 }
 
 export default function Dashboard({
@@ -31,40 +37,21 @@ export default function Dashboard({
   walletAddress,
   isConnected,
   balances,
+  addresses,
   onConnectWallet,
-  onTransferAEDZ,
-  onConvertToFCV,
+  onDepositAndConvert,
+  onTransferFCV,
   onLogout,
   isTransacting = false, 
 }: DashboardProps) {
-  const [transferAmount, setTransferAmount] = useState('');
   const [convertAmount, setConvertAmount] = useState('');
-  const [isTransferring, setIsTransferring] = useState(false);
+  const [transferAmount, setTransferAmount] = useState('');
+  const [recipientAddress, setRecipientAddress] = useState('');
   const [isConverting, setIsConverting] = useState(false);
-  const [copied, setCopied] = useState(false);
-
-  const handleTransfer = async () => {
-    if (!transferAmount || parseFloat(transferAmount) <= 0) {
-      toast.error('Please enter a valid amount');
-      return;
-    }
-
-    if (parseFloat(transferAmount) > parseFloat(balances.wallet)) {
-      toast.error('Insufficient AEDZ balance in wallet');
-      return;
-    }
-
-    setIsTransferring(true);
-    try {
-      await onTransferAEDZ(transferAmount);
-      setTransferAmount('');
-    } catch (error) {
-      console.error(error);
-       setIsTransferring(false);
-    } finally {
-      setIsTransferring(false);
-    }
-  };
+  const [isTransferring, setIsTransferring] = useState(false);
+  const [copiedWallet, setCopiedWallet] = useState(false);
+  const [copiedFcv, setCopiedFcv] = useState(false);
+  const [copiedFcc, setCopiedFcc] = useState(false);
 
   const handleConvert = async () => {
     if (!convertAmount || parseFloat(convertAmount) <= 0) {
@@ -72,14 +59,14 @@ export default function Dashboard({
       return;
     }
 
-    if (parseFloat(convertAmount) > parseFloat(balances.AEDZ)) {
-      toast.error('Insufficient AEDZ balance in contract');
+    if (parseFloat(convertAmount) > parseFloat(balances.wallet)) {
+      toast.error('Insufficient AEDZ balance in wallet');
       return;
     }
 
     setIsConverting(true);
     try {
-      await onConvertToFCV(convertAmount);
+      await onDepositAndConvert(convertAmount);
       setConvertAmount('');
     } catch (error) {
       console.error(error);
@@ -88,16 +75,54 @@ export default function Dashboard({
     }
   };
 
+  const handleTransfer = async () => {
+    if (!transferAmount || parseFloat(transferAmount) <= 0) {
+      toast.error('Please enter a valid amount');
+      return;
+    }
+
+    if (!recipientAddress || recipientAddress.trim() === '') {
+      toast.error('Please enter a recipient address');
+      return;
+    }
+
+    if (parseFloat(transferAmount) > parseFloat(balances.fcv)) {
+      toast.error('Insufficient FCV balance');
+      return;
+    }
+
+    setIsTransferring(true);
+    try {
+      await onTransferFCV(recipientAddress, transferAmount);
+      setTransferAmount('');
+      setRecipientAddress('');
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setIsTransferring(false);
+    }
+  };
+
   const formatAddress = (address: string) => {
     if (!address) return '';
     return `${address.slice(0, 6)}...${address.slice(-4)}`;
   };
 
-  const copyAddress = () => {
-    navigator.clipboard.writeText(walletAddress);
-    setCopied(true);
+  const copyToClipboard = (text: string, type: 'wallet' | 'fcv' | 'fcc') => {
+    navigator.clipboard.writeText(text);
+    
+    if (type === 'wallet') {
+      setCopiedWallet(true);
+      setTimeout(() => setCopiedWallet(false), 2000);
+    } else if (type === 'fcv') {
+      setCopiedFcv(true);
+      setTimeout(() => setCopiedFcv(false), 2000);
+    } else if (type === 'fcc') {
+      setCopiedFcc(true);
+      setTimeout(() => setCopiedFcc(false), 2000);
+    }
+    
     toast.success('Address copied!');
-    setTimeout(() => setCopied(false), 2000);
   };
 
   return (
@@ -115,8 +140,11 @@ export default function Dashboard({
               <div className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-lg border border-indigo-200">
                 <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
                 <span className="text-sm font-mono text-gray-700">{formatAddress(walletAddress)}</span>
-                <button onClick={copyAddress} className="ml-1 hover:text-indigo-600 transition-colors">
-                  {copied ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
+                <button 
+                  onClick={() => copyToClipboard(walletAddress, 'wallet')} 
+                  className="ml-1 hover:text-indigo-600 transition-colors"
+                >
+                  {copiedWallet ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
                 </button>
               </div>
             )}
@@ -170,7 +198,8 @@ export default function Dashboard({
                 </div>
                 <div className="text-gray-500 text-sm">AEDZ (In Contract)</div>
                 <div className="text-gray-500 text-xs mt-2">
-                  Available in connected wallet:  <strong className="text-gray-900">{parseFloat(balances.wallet).toFixed(2)} د.إ</strong> </div>
+                  Available in wallet: <strong className="text-gray-900">{parseFloat(balances.wallet).toFixed(2)} د.إ</strong>
+                </div>
               </div>
 
               {/* FCV Balance */}
@@ -184,7 +213,30 @@ export default function Dashboard({
                 <div className="text-3xl font-bold text-gray-900 mb-1">
                   {parseFloat(balances.fcv).toFixed(2)}
                 </div>
-                <div className="text-gray-500 text-sm">FCV (Solana)</div>
+                <div className="text-gray-500 text-sm mb-2">FCV (Solana)</div>
+                
+                {addresses.fcvAtaAddress && (
+                  <div className="mt-3 p-2 bg-purple-50 rounded-lg border border-purple-200">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs text-gray-600 mb-1">Token Address:</p>
+                        <p className="text-xs font-mono text-purple-700 truncate">
+                          {formatAddress(addresses.fcvAtaAddress)}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => copyToClipboard(addresses.fcvAtaAddress, 'fcv')}
+                        className="flex-shrink-0 p-1.5 hover:bg-purple-100 rounded transition-colors"
+                      >
+                        {copiedFcv ? (
+                          <Check className="w-3.5 h-3.5 text-green-600" />
+                        ) : (
+                          <Copy className="w-3.5 h-3.5 text-purple-600" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* FCC Balance */}
@@ -198,82 +250,44 @@ export default function Dashboard({
                 <div className="text-3xl font-bold text-gray-900 mb-1">
                   {parseFloat(balances.fcc).toFixed(2)}
                 </div>
-                <div className="text-gray-500 text-sm">FCC (Solana)</div>
+                <div className="text-gray-500 text-sm mb-2">FCC (Solana)</div>
+                
+                {addresses.fccAtaAddress && (
+                  <div className="mt-3 p-2 bg-green-50 rounded-lg border border-green-200">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs text-gray-600 mb-1">Token Address:</p>
+                        <p className="text-xs font-mono text-green-700 truncate">
+                          {formatAddress(addresses.fccAtaAddress)}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => copyToClipboard(addresses.fccAtaAddress, 'fcc')}
+                        className="flex-shrink-0 p-1.5 hover:bg-green-100 rounded transition-colors"
+                      >
+                        {copiedFcc ? (
+                          <Check className="w-3.5 h-3.5 text-green-600" />
+                        ) : (
+                          <Copy className="w-3.5 h-3.5 text-green-600" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
             {/* Actions */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Transfer AEDZ */}
-              <div className="bg-white rounded-2xl shadow-xl p-8">
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="w-12 h-12 bg-gradient-to-br from-indigo-600 to-blue-500 rounded-xl flex items-center justify-center">
-                    <Send className="w-6 h-6 text-white" />
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-bold text-gray-900">Transfer AEDZ</h3>
-                    <p className="text-gray-600 text-sm">Fund your contract account</p>
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium mb-2 text-gray-700">
-                      Amount (AEDZ)
-                    </label>
-                    <div className="relative">
-                      <input
-                        type="number"
-                        value={transferAmount}
-                        onChange={(e) => setTransferAmount(e.target.value)}
-                        placeholder="0.00"
-                        step="0.01"
-                        min="0"
-                        disabled={isTransacting || isTransferring}
-                        className="w-full px-4 py-3 pr-20 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
-                      />
-                      <button
-                        onClick={() => setTransferAmount(balances.wallet)}
-                        disabled={isTransacting || isTransferring}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-indigo-600 text-sm font-semibold hover:text-purple-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        MAX
-                      </button>
-                    </div>
-                    <p className="text-gray-500 text-xs mt-2">
-                      Available in wallet: {parseFloat(balances.wallet).toFixed(2)} AEDZ
-                    </p>
-                  </div>
-
-                  <button
-                    onClick={handleTransfer}
-                    disabled={isTransacting || isTransferring || !transferAmount}
-                    className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white py-4 rounded-xl font-semibold hover:from-indigo-700 hover:to-purple-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                  >
-                    {isTransacting || isTransferring ? (
-                      <>
-                        <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                        <span>Processing...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Send className="w-5 h-5" />
-                        <span>Transfer to Contract</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
-
-              {/* Convert to FCV */}
+              {/* Convert AEDZ to FCV (Web3 Transaction) */}
               <div className="bg-white rounded-2xl shadow-xl p-8">
                 <div className="flex items-center gap-3 mb-6">
                   <div className="w-12 h-12 bg-gradient-to-br from-purple-600 to-pink-500 rounded-xl flex items-center justify-center">
                     <RefreshCw className="w-6 h-6 text-white" />
                   </div>
                   <div>
-                    <h3 className="text-xl font-bold text-gray-900">Convert to FCV</h3>
-                    <p className="text-gray-600 text-sm">Exchange AEDZ for FCV tokens</p>
+                    <h3 className="text-xl font-bold text-gray-900">Convert AEDZ to FCV</h3>
+                    <p className="text-gray-600 text-sm">Deposit & convert to FCV tokens</p>
                   </div>
                 </div>
 
@@ -290,26 +304,26 @@ export default function Dashboard({
                         placeholder="0.00"
                         step="0.01"
                         min="0"
-                        disabled={isConverting}
+                        disabled={isTransacting || isConverting}
                         className="w-full px-4 py-3 pr-20 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
                       />
                       <button
-                        onClick={() => setConvertAmount(balances.AEDZ)}
-                        disabled={isConverting}
+                        onClick={() => setConvertAmount(balances.wallet)}
+                        disabled={isTransacting || isConverting}
                         className="absolute right-3 top-1/2 -translate-y-1/2 text-indigo-600 text-sm font-semibold hover:text-purple-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         MAX
                       </button>
                     </div>
                     <p className="text-gray-500 text-xs mt-2">
-                      Available in contract: {parseFloat(balances.AEDZ).toFixed(2)} AEDZ
+                      Available in wallet: {parseFloat(balances.wallet).toFixed(2)} AEDZ
                     </p>
                     {convertAmount && (
                       <div className="mt-3 p-3 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-lg border border-indigo-200">
                         <div className="flex items-center justify-between text-sm">
                           <span className="text-gray-600">You will receive:</span>
                           <span className="font-bold text-purple-600">
-                            ≈ {(parseFloat(convertAmount) * 1.5).toFixed(2)} FCV
+                            ≈ {(parseFloat(convertAmount)).toFixed(2)} FCV
                           </span>
                         </div>
                       </div>
@@ -318,13 +332,13 @@ export default function Dashboard({
 
                   <button
                     onClick={handleConvert}
-                    disabled={isConverting || !convertAmount}
+                    disabled={isTransacting || isConverting || !convertAmount}
                     className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white py-4 rounded-xl font-semibold hover:from-indigo-700 hover:to-purple-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                   >
-                    {isConverting ? (
+                    {isTransacting || isConverting ? (
                       <>
                         <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                        <span>Converting...</span>
+                        <span>Processing...</span>
                       </>
                     ) : (
                       <>
@@ -335,7 +349,86 @@ export default function Dashboard({
                   </button>
 
                   <p className="text-gray-500 text-xs text-center">
-                    You'll receive a push notification when conversion is complete
+                    Requires wallet approval + deposit to contract, then conversion to FCV
+                  </p>
+                </div>
+              </div>
+
+              {/* Transfer FCV to Another User (API Call) */}
+              <div className="bg-white rounded-2xl shadow-xl p-8">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="w-12 h-12 bg-gradient-to-br from-indigo-600 to-blue-500 rounded-xl flex items-center justify-center">
+                    <Send className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-gray-900">Transfer FCV</h3>
+                    <p className="text-gray-600 text-sm">Send FCV to another user</p>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-2 text-gray-700">
+                      Recipient Address (Solana)
+                    </label>
+                    <input
+                      type="text"
+                      value={recipientAddress}
+                      onChange={(e) => setRecipientAddress(e.target.value)}
+                      placeholder="Enter Solana wallet address"
+                      disabled={isTransferring}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed font-mono text-sm"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-2 text-gray-700">
+                      Amount (FCV)
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        value={transferAmount}
+                        onChange={(e) => setTransferAmount(e.target.value)}
+                        placeholder="0.00"
+                        step="0.01"
+                        min="0"
+                        disabled={isTransferring}
+                        className="w-full px-4 py-3 pr-20 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+                      />
+                      <button
+                        onClick={() => setTransferAmount(balances.fcv)}
+                        disabled={isTransferring}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-indigo-600 text-sm font-semibold hover:text-purple-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        MAX
+                      </button>
+                    </div>
+                    <p className="text-gray-500 text-xs mt-2">
+                      Available: {parseFloat(balances.fcv).toFixed(2)} FCV
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={handleTransfer}
+                    disabled={isTransferring || !transferAmount || !recipientAddress}
+                    className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white py-4 rounded-xl font-semibold hover:from-indigo-700 hover:to-purple-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    {isTransferring ? (
+                      <>
+                        <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        <span>Transferring...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Send className="w-5 h-5" />
+                        <span>Transfer FCV</span>
+                      </>
+                    )}
+                  </button>
+
+                  <p className="text-gray-500 text-xs text-center">
+                    Transfer will be processed on Solana network
                   </p>
                 </div>
               </div>
@@ -358,13 +451,19 @@ export default function Dashboard({
                   <div className="w-6 h-6 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
                     <span className="text-xs font-bold">2</span>
                   </div>
-                  <p>Transfer AEDZ from your wallet to the contract (requires approval + deposit)</p>
+                  <p>Convert AEDZ to FCV by approving and depositing to the contract - conversion happens automatically</p>
                 </div>
                 <div className="flex items-start gap-3">
                   <div className="w-6 h-6 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
                     <span className="text-xs font-bold">3</span>
                   </div>
-                  <p>Convert AEDZ to FCV/FCC tokens on Solana (you'll receive a push notification when complete)</p>
+                  <p>Transfer your FCV tokens to other users on the Solana network using their wallet address</p>
+                </div>
+                <div className="flex items-start gap-3">
+                  <div className="w-6 h-6 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <span className="text-xs font-bold">4</span>
+                  </div>
+                  <p>You'll receive push notifications when conversions are complete and balances are updated</p>
                 </div>
               </div>
             </div>

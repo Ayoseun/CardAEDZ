@@ -18,6 +18,7 @@
     "@zerodev/sdk": "^5.5.7",
     "@zerodevapp/sdk": "^3.4.4",
     "ethers": "^5.8.0",
+    "firebase": "^12.9.0",
     "install": "^0.13.0",
     "lucide-react": "^0.562.0",
     "npm": "^11.7.0",
