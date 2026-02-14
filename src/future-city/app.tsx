@@ -340,6 +340,7 @@ const bytes32User = utils.hexZeroPad(
         address: POOL_CONTRACT_ADDRESS,
         abi: POOL_ABI,
         functionName: 'deposit',
+        //@ts-ignore
         args: [bytes32User, amountInWei],
         chainId: baseSepolia.id,
       });
