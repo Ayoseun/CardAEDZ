@@ -12,7 +12,7 @@ import { utils } from 'ethers';
 
 const AEDZ_CONTRACT_ADDRESS = '0xee6a1a4360aA0101cCC6C2d4671a79c3DF778E56';
 const POOL_CONTRACT_ADDRESS = '0xC9d5040aAdf39C4ef71Ab32F9913cE21e70c6D2C';
-const WS_URL = 'ws://165.245.144.184:3000'; // Update with your WebSocket URL
+const WS_URL = 'ws://localhost:3000'; // Update with your WebSocket URL
 
 const AEDZ_ABI = [
   {
@@ -177,7 +177,7 @@ function AppContent() {
   // Handle login
   const handleLogin = async (credentials: any) => {
     try {
-      const response = await fetch('http://165.245.144.184:3000/api/v1/auth/login', {
+      const response = await fetch('http://localhost:3000/api/v1/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(credentials),
@@ -205,7 +205,7 @@ function AppContent() {
   // Handle 2FA verification
   const handle2FA = async (code: any) => {
     try {
-      const response = await fetch('http://165.245.144.184:3000/api/v1/auth/verify-2fa', {
+      const response = await fetch('http://localhost:3000/api/v1/auth/verify-2fa', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -400,7 +400,7 @@ const bytes32User = utils.hexZeroPad(
     try {
       toast.loading('Processing conversion...', { id: 'converting' });
 
-      const response = await fetch('http://165.245.144.184:3000/api/v1/wallet/convert', {
+      const response = await fetch('http://localhost:3000/api/v1/wallet/initiate-deposit', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -439,7 +439,7 @@ const bytes32User = utils.hexZeroPad(
     try {
       toast.loading('Transferring FCV...', { id: 'transfer-fcv' });
 
-      const response = await fetch('http://165.245.144.184:3000/api/v1/wallet/transfer', {
+      const response = await fetch('http://localhost:3000/api/v1/wallet/transfer', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -466,10 +466,43 @@ const bytes32User = utils.hexZeroPad(
     }
   };
 
+  // Withdraw FCV to AEDZ
+  const withdrawFCV = async (amount: string) => {
+    try {
+      toast.loading('Processing withdrawal...', { id: 'withdraw-fcv' });
+
+      const response = await fetch('http://localhost:3000/api/v1/wallet/initiate-withdrawal', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${user?.accessToken}`,
+        },
+        body: JSON.stringify({
+          "amount": amount.toString(),
+          "wallet_address": address.toString(),
+        }),
+      });
+
+      const data = await response.json();
+      toast.dismiss('withdraw-fcv');
+
+      if (data.success) {
+        toast.success(data.message || 'Withdrawal successful!');
+        fetchBalances();
+        refetchAEDZBalance();
+      } else {
+        toast.error(data.message || 'Withdrawal failed');
+      }
+    } catch (error: any) {
+      toast.dismiss('withdraw-fcv');
+      toast.error('Withdrawal failed: ' + error.message);
+    }
+  };
+
   // Fetch all balances from backend
   const fetchBalances = async () => {
     try {
-      const response = await fetch('http://165.245.144.184:3000/api/v1/wallet/balance', {
+      const response = await fetch('http://localhost:3000/api/v1/wallet/balance', {
         headers: {
           'Authorization': `Bearer ${user?.accessToken}`,
         },
@@ -553,6 +586,7 @@ const bytes32User = utils.hexZeroPad(
           onConnectWallet={connectWallet}
           onDepositAndConvert={depositAndConvert}
           onTransferFCV={transferFCV}
+          onWithdraw={withdrawFCV}
           onLogout={handleLogout}
           isTransacting={isPending || isConfirming}
         />

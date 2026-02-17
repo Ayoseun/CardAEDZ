@@ -10,9 +10,9 @@ import {
 } from "@web3auth/modal/react";
 import { useSolanaWallet } from "@web3auth/modal/react/solana";
 import { createPublicClient, http } from 'viem';
-import { baseSepolia } from 'viem/chains';
+import { base, bsc, polygon, arbitrum, optimism, avalanche, mainnet } from 'viem/chains';
 import { EscrowService } from '../constants/escrowContract';
-import { ZERO_DEV_RPC_URL, ZERO_DEV_PASSKEY_SERVER_URL, USDC_ADDRESS } from '../constants/config';
+import { ZERO_DEV_RPC_URL, ZERO_DEV_PASSKEY_SERVER_URL, USDC_ADDRESS, SUPPORTED_CHAINS_MAINNET, ZERO_DEV_RPC_URL_ETH, ZERO_DEV_RPC_URL_OPTIMISM, ZERO_DEV_RPC_URL_POLYGON, ZERO_DEV_RPC_URL_ARBITRIUM, ZERO_DEV_RPC_URL_BSC } from '../constants/config';
 import { LoginScreen } from './login';
 import { WithdrawModal } from './modals/withdrawal';
 import { mockTransactions, type Transaction, type User } from '../utils/types';
@@ -34,13 +34,52 @@ import {
     createZeroDevPaymasterClient,
 } from "@zerodev/sdk";
 import { KERNEL_V3_1, getEntryPoint } from "@zerodev/sdk/constants";
-
 import TopUpModal from './modals/topUpModal';
 
 // Configuration
-const CHAIN = baseSepolia;
+const CHAIN = base;
 const entryPoint = getEntryPoint("0.7");
 const HARDCODED_SPEND_AMOUNT = "25.00"; // $25 per transaction
+
+// Define supported chains with their RPC URLs
+const MULTICHAIN_CONFIG = [
+    { 
+        chain: base, 
+        name: 'Base', 
+        rpcUrl: ZERO_DEV_RPC_URL, // Base uses main RPC
+        chainId: 8453 
+    },
+        { 
+        chain: mainnet, 
+        name: 'ETH', 
+        rpcUrl: ZERO_DEV_RPC_URL_ETH, 
+        chainId: 56 
+    },
+    { 
+        chain: bsc, 
+        name: 'BSC', 
+        rpcUrl: ZERO_DEV_RPC_URL_BSC,
+        chainId: 56 
+    },
+    { 
+        chain: polygon, 
+        name: 'Polygon', 
+        rpcUrl: ZERO_DEV_RPC_URL_POLYGON, 
+        chainId: 137 
+    },
+    { 
+        chain: arbitrum, 
+        name: 'Arbitrum', 
+        rpcUrl: ZERO_DEV_RPC_URL_ARBITRIUM, 
+        chainId: 42161 
+    },
+    { 
+        chain: optimism, 
+        name: 'Optimism', 
+        rpcUrl: ZERO_DEV_RPC_URL_OPTIMISM, 
+        chainId: 10 
+    },
+];
 
 export default function Dashboard() {
     const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -58,9 +97,11 @@ export default function Dashboard() {
     const [isSpending, setIsSpending] = useState(false);
     const [escrowService, setEscrowService] = useState<any>(null);
 
-    // ZeroDev states
-    const [kernelAccount, setKernelAccount] = useState<any>(null);
-    const [kernelClient, setKernelClient] = useState<any>(null);
+    // Multi-chain ZeroDev states
+    const [kernelAccounts, setKernelAccounts] = useState<Record<number, any>>({});
+    const [kernelClients, setKernelClients] = useState<Record<number, any>>({});
+    const [kernelAccount, setKernelAccount] = useState<any>(null); // Base account for backward compatibility
+    const [kernelClient, setKernelClient] = useState<any>(null); // Base client for backward compatibility
     const [isCreatingPasskey, setIsCreatingPasskey] = useState(false);
     const [passkeyCreated, setPasskeyCreated] = useState(false);
     const [passkeyLoginFailed, setPasskeyLoginFailed] = useState(false);
@@ -70,13 +111,7 @@ export default function Dashboard() {
     const { disconnect } = useWeb3AuthDisconnect();
     const { userInfo } = useWeb3AuthUser();
     const { accounts, connection } = useSolanaWallet();
-    
-    const publicClient = createPublicClient({
-        transport: http(ZERO_DEV_RPC_URL),
-        chain: CHAIN,
-    });
 
-    // FIXED: Always attempt passkey login first, don't rely on localStorage
     useEffect(() => {
         if (isConnected && userInfo && !loginAttemptedRef.current) {
             setIsAuthenticated(true);
@@ -87,13 +122,12 @@ export default function Dashboard() {
                 avatar: userInfo.profileImage || ''
             } as any);
 
-            // Always try to login with existing passkey first
             loginAttemptedRef.current = true;
             attemptPasskeyLogin();
         }
     }, [isConnected, userInfo]);
 
-    // FIXED: Attempt to login with existing passkey
+    // Attempt to login with existing passkey (multi-chain)
     const attemptPasskeyLogin = async () => {
         if (!isConnected) return;
         
@@ -101,7 +135,7 @@ export default function Dashboard() {
         try {
             const passkeyName = userInfo?.email || 'cardaedz-user';
 
-            // Try to login with existing passkey
+            // Login with existing passkey
             const webAuthnKey = await toWebAuthnKey({
                 passkeyName: passkeyName,
                 passkeyServerUrl: ZERO_DEV_PASSKEY_SERVER_URL,
@@ -109,37 +143,65 @@ export default function Dashboard() {
                 passkeyServerHeaders: {}
             });
 
-            const passkeyValidator = await toPasskeyValidator(publicClient, {
-                webAuthnKey,
-                entryPoint,
-                kernelVersion: KERNEL_V3_1,
-                validatorContractVersion: PasskeyValidatorContractVersion.V0_0_3_PATCHED
-            });
+            const accounts: Record<number, any> = {};
+            const clients: Record<number, any> = {};
 
-            const account = await createKernelAccount(publicClient, {
-                plugins: {
-                    sudo: passkeyValidator,
-                },
-                entryPoint,
-                kernelVersion: KERNEL_V3_1
-            });
+            // Create kernel account on each supported chain
+            for (const { chain, name, rpcUrl, chainId } of MULTICHAIN_CONFIG) {
+                console.log(`Logging in on ${name}...`);
 
+                const publicClient = createPublicClient({
+                    transport: http(rpcUrl),
+                    chain: chain,
+                });
+
+                const passkeyValidator = await toPasskeyValidator(publicClient, {
+                    webAuthnKey,
+                    entryPoint,
+                    kernelVersion: KERNEL_V3_1,
+                    validatorContractVersion: PasskeyValidatorContractVersion.V0_0_3_PATCHED
+                });
+
+                const account = await createKernelAccount(publicClient, {
+                    plugins: {
+                        sudo: passkeyValidator,
+                    },
+                    entryPoint,
+                    kernelVersion: KERNEL_V3_1
+                });
+
+                const client = createKernelAccountClient({
+                    account,
+                    chain: chain,
+                    bundlerTransport: http(rpcUrl),
+                    client: publicClient,
+                });
+
+                accounts[chainId] = account;
+                clients[chainId] = client;
+
+                console.log(`${name} account:`, account.address);
+            }
+
+            setKernelAccounts(accounts);
+            setKernelClients(clients);
+
+            // Set Base as default for backward compatibility
+            setKernelAccount(accounts[8453]);
+            setKernelClient(clients[8453]);
+
+            // Create escrow service for Base
             const paymasterClient = createZeroDevPaymasterClient({
                 chain: CHAIN,
                 transport: http(ZERO_DEV_RPC_URL),
             });
 
-            const client = createKernelAccountClient({
-                account,
-                chain: CHAIN,
-                bundlerTransport: http(ZERO_DEV_RPC_URL),
-                client: publicClient,
-            });
-
-            setKernelAccount(account);
-            setKernelClient(client);
-
-            const service = new EscrowService(client, account.address, paymasterClient, entryPoint);
+            const service = new EscrowService(
+                clients[8453], 
+                accounts[8453].address, 
+                paymasterClient, 
+                entryPoint
+            );
             setEscrowService(service);
 
             setPasskeyCreated(true);
@@ -147,10 +209,10 @@ export default function Dashboard() {
 
             await loadBalances(service);
             
-            console.log('Successfully logged in with existing passkey');
+            console.log('Successfully logged in with passkey on all chains');
+            console.log('Your address on all chains:', accounts[8453].address);
         } catch (error) {
             console.log('No existing passkey found or login failed:', error);
-            // This is expected on first login - show passkey creation screen
             setPasskeyLoginFailed(true);
             setPasskeyCreated(false);
         } finally {
@@ -158,11 +220,11 @@ export default function Dashboard() {
         }
     };
 
-    // Create passkey wallet (only called when user explicitly creates one)
+    // Create passkey wallet (multi-chain)
     const createPasskeyWallet = async () => {
         if (!isConnected) return;
 
-        console.log("Creating passkey wallet...");
+        console.log("Creating passkey wallet on all chains...");
         setIsCreatingPasskey(true);
         try {
             const passkeyName = userInfo?.email || 'cardaedz-user';
@@ -174,37 +236,64 @@ export default function Dashboard() {
                 passkeyServerHeaders: {}
             });
 
-            const passkeyValidator = await toPasskeyValidator(publicClient, {
-                webAuthnKey,
-                entryPoint,
-                kernelVersion: KERNEL_V3_1,
-                validatorContractVersion: PasskeyValidatorContractVersion.V0_0_3_PATCHED
-            });
+            const accounts: Record<number, any> = {};
+            const clients: Record<number, any> = {};
 
-            const account = await createKernelAccount(publicClient, {
-                plugins: {
-                    sudo: passkeyValidator,
-                },
-                entryPoint,
-                kernelVersion: KERNEL_V3_1
-            });
+            // Create kernel account on each supported chain
+            for (const { chain, name, rpcUrl, chainId } of MULTICHAIN_CONFIG) {
+                console.log(`Creating account on ${name}...`);
+
+                const publicClient = createPublicClient({
+                    transport: http(rpcUrl),
+                    chain: chain,
+                });
+
+                const passkeyValidator = await toPasskeyValidator(publicClient, {
+                    webAuthnKey,
+                    entryPoint,
+                    kernelVersion: KERNEL_V3_1,
+                    validatorContractVersion: PasskeyValidatorContractVersion.V0_0_3_PATCHED
+                });
+
+                const account = await createKernelAccount(publicClient, {
+                    plugins: {
+                        sudo: passkeyValidator,
+                    },
+                    entryPoint,
+                    kernelVersion: KERNEL_V3_1
+                });
+
+                const client = createKernelAccountClient({
+                    account,
+                    chain: chain,
+                    bundlerTransport: http(rpcUrl),
+                    client: publicClient,
+                });
+
+                accounts[chainId] = account;
+                clients[chainId] = client;
+
+                console.log(`${name} account created:`, account.address);
+            }
+
+            setKernelAccounts(accounts);
+            setKernelClients(clients);
+
+            // Set Base as default
+            setKernelAccount(accounts[8453]);
+            setKernelClient(clients[8453]);
 
             const paymasterClient = createZeroDevPaymasterClient({
                 chain: CHAIN,
                 transport: http(ZERO_DEV_RPC_URL),
             });
 
-            const client = createKernelAccountClient({
-                account,
-                chain: CHAIN,
-                bundlerTransport: http(ZERO_DEV_RPC_URL),
-                client: publicClient,
-            });
-
-            setKernelAccount(account);
-            setKernelClient(client);
-
-            const service = new EscrowService(client, account.address, paymasterClient, entryPoint);
+            const service = new EscrowService(
+                clients[8453], 
+                accounts[8453].address, 
+                paymasterClient, 
+                entryPoint
+            );
             setEscrowService(service);
 
             setPasskeyCreated(true);
@@ -212,7 +301,7 @@ export default function Dashboard() {
 
             await loadBalances(service);
 
-            alert('Passkey wallet created successfully! Your wallet address: ' + account.address);
+            alert(`Passkey wallet created on all chains!\n\nYour address: ${accounts[8453].address}\n\nThis same address exists on Base, BSC, Polygon, Arbitrum, and Optimism!`);
         } catch (error) {
             console.error("Failed to create passkey wallet:", error);
             alert('Failed to create passkey wallet. Please try again.');
@@ -306,6 +395,8 @@ export default function Dashboard() {
         setEscrowService(null);
         setKernelAccount(null);
         setKernelClient(null);
+        setKernelAccounts({});
+        setKernelClients({});
         setPasskeyCreated(false);
         setPasskeyLoginFailed(false);
         loginAttemptedRef.current = false;
@@ -326,7 +417,6 @@ export default function Dashboard() {
         return <LoginScreen onLogin={handleLogin} isLoading={isLoading} />;
     }
 
-    // FIXED: Show passkey creation only if login failed (no existing passkey)
     if (isAuthenticated && passkeyLoginFailed && !passkeyCreated && !isCreatingPasskey && !isLoading) {
         return (
             <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 flex items-center justify-center p-4">
@@ -335,13 +425,25 @@ export default function Dashboard() {
                         <div className="w-16 h-16 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-4">
                             <Key className="w-8 h-8 text-white" />
                         </div>
-                        <h2 className="text-2xl font-bold text-gray-900 mb-2">Create Your Passkey Wallet</h2>
+                        <h2 className="text-2xl font-bold text-gray-900 mb-2">Create Your Multi-Chain Wallet</h2>
                         <p className="text-gray-600">
-                            Secure your funds with a passkey - no seed phrases needed!
+                            One passkey, one address - works on all chains!
                         </p>
                     </div>
 
                     <div className="space-y-4 mb-6">
+                        <div className="flex items-start space-x-3">
+                            <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                                <svg className="w-4 h-4 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                </svg>
+                            </div>
+                            <div>
+                                <p className="font-medium text-gray-900">Same Address Everywhere</p>
+                                <p className="text-sm text-gray-600">One address on Base, BSC, Polygon, Arbitrum, Optimism</p>
+                            </div>
+                        </div>
+
                         <div className="flex items-start space-x-3">
                             <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
                                 <svg className="w-4 h-4 text-green-600" fill="currentColor" viewBox="0 0 20 20">
@@ -365,18 +467,6 @@ export default function Dashboard() {
                                 <p className="text-sm text-gray-600">Your passkey is stored securely on your device</p>
                             </div>
                         </div>
-
-                        <div className="flex items-start space-x-3">
-                            <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                                <svg className="w-4 h-4 text-green-600" fill="currentColor" viewBox="0 0 20 20">
-                                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                                </svg>
-                            </div>
-                            <div>
-                                <p className="font-medium text-gray-900">Survives History Clears</p>
-                                <p className="text-sm text-gray-600">Passkey persists even if you clear browser data</p>
-                            </div>
-                        </div>
                     </div>
 
                     <button
@@ -384,7 +474,7 @@ export default function Dashboard() {
                         disabled={isCreatingPasskey}
                         className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold py-3 rounded-lg hover:from-indigo-700 hover:to-purple-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                        {isCreatingPasskey ? 'Creating Wallet...' : 'Create Passkey Wallet'}
+                        {isCreatingPasskey ? 'Creating Multi-Chain Wallet...' : 'Create Passkey Wallet'}
                     </button>
 
                     <button
@@ -398,7 +488,6 @@ export default function Dashboard() {
         );
     }
 
-    // Show loading state while attempting passkey login
     if (isAuthenticated && !passkeyCreated && !passkeyLoginFailed) {
         return (
             <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 flex items-center justify-center p-4">
@@ -418,7 +507,6 @@ export default function Dashboard() {
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50">
-            {/* Rest of the dashboard JSX remains the same... */}
             <header className="bg-white border-b border-gray-200 sticky top-0 z-30 shadow-sm">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4">
                     <div className="flex items-center justify-between">
@@ -428,7 +516,7 @@ export default function Dashboard() {
                             </div>
                             <div>
                                 <h1 className="text-xl font-bold text-gray-900">AEDZ Pay</h1>
-                                <p className="text-xs text-gray-500">Self-custodial spending</p>
+                                <p className="text-xs text-gray-500">Multi-chain smart wallet</p>
                             </div>
                         </div>
                         <div className="flex items-center space-x-4">
@@ -511,7 +599,6 @@ export default function Dashboard() {
                     </div>
                 </div>
 
-                {/* Quick actions and rest of dashboard... same as original */}
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
                     <QuickAction
                         icon={ArrowDownLeft}
@@ -585,25 +672,26 @@ export default function Dashboard() {
                 </div>
             </div>
 
-            {showFundWalletModal && kernelClient && (
+            {showFundWalletModal && Object.keys(kernelClients).length > 0 && (
                 <TopUpModal
                     onClose={() => setShowFundWalletModal(false)}
                     walletBalance={walletBalance}
                     mode="fund"
-                    address={kernelAccount.address}
+                    kernelAccounts={kernelAccounts}
+                    kernelClients={kernelClients}
                     escrowService={escrowService}
                     connection={connection}
                     solanaAddress={accounts?.[0]}
                 />
             )}
 
-            {showTopUpCardModal && kernelClient && (
+            {showTopUpCardModal && Object.keys(kernelClients).length > 0 && (
                 <TopUpModal
                     onClose={() => setShowTopUpCardModal(false)}
                     walletBalance={walletBalance}
-                    address={kernelAccount.address}
+                    kernelAccounts={kernelAccounts}
+                    kernelClients={kernelClients}
                     escrowService={escrowService}
-                    kernelClient={kernelClient}
                     connection={connection}
                     solanaAddress={accounts?.[0]}
                     onDeposit={async (amount: any, network: any) => {

@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
-import { Wallet, Send, RefreshCw, Info, LogOut, Copy, Check } from 'lucide-react';
+import { Wallet, Send, RefreshCw, Info, LogOut, Copy, Check, ArrowDownLeft, ArrowUpRight, Gift, Building2, List, X, Eye, ArrowDownToLine } from 'lucide-react';
 
 interface User {
   email?: string;
   accessToken?: string;
+  userId?: string;
 }
 
 interface Balances {
@@ -28,9 +29,205 @@ interface DashboardProps {
   onConnectWallet: () => void;
   onDepositAndConvert: (amount: string) => Promise<void>;
   onTransferFCV: (recipientAddress: string, amount: string) => Promise<void>;
+  onWithdraw: (amount: string) => Promise<void>;
   onLogout: () => void;
   isTransacting?: boolean;
 }
+
+// API Transaction Response
+interface ApiTransaction {
+  id: string;
+  user_id: string;
+  wallet_id: string;
+  type: string;
+  status: string;
+  amount: number;
+  currency: string;
+  fee: number;
+  balance_before: number;
+  balance_after: number;
+  recipient_wallet_id?: string;
+  description: string;
+  created_at: string;
+  updated_at: string;
+  tx_hash?: string;
+}
+
+interface Transaction {
+  id: string;
+  type: 'convert' | 'send' | 'receive' | 'reward' | 'sell' | 'investment' | 'listed' | 'cancelled';
+  title: string;
+  description: string;
+  amount: string;
+  token: 'FCV' | 'FCC' | 'AEDZ';
+  equivalentAmount?: string;
+  equivalentToken?: string;
+  status: 'completed' | 'pending' | 'failed';
+  date: string;
+  time: string;
+  txId?: string;
+  propertyName?: string;
+  location?: string;
+}
+
+// Map API transaction type to UI type
+const mapTransactionType = (apiType: string): Transaction['type'] => {
+  const typeMap: Record<string, Transaction['type']> = {
+    'CONVERT_TO_FCV': 'convert',
+    'SEND_FCV': 'send',
+    'RECEIVE_FCV': 'receive',
+    'FCC_REWARD': 'reward',
+    'FCC_SELL': 'sell',
+    'PROPERTY_INVESTMENT': 'investment',
+    'FCC_LISTED': 'listed',
+    'FCC_LISTING_CANCELLED': 'cancelled',
+    'WITHDRAW_FCV': 'send',
+  };
+  return typeMap[apiType] || 'convert';
+};
+
+// Map API status to UI status
+const mapTransactionStatus = (apiStatus: string): Transaction['status'] => {
+  const statusMap: Record<string, Transaction['status']> = {
+    'COMPLETED': 'completed',
+    'PENDING': 'pending',
+    'FAILED': 'failed',
+    'PROCESSING': 'pending',
+  };
+  return statusMap[apiStatus] || 'pending';
+};
+
+// Get transaction title from type
+const getTransactionTitle = (apiType: string): string => {
+  const titleMap: Record<string, string> = {
+    'CONVERT_TO_FCV': 'Convert to FCV',
+    'SEND_FCV': 'Send FCV',
+    'RECEIVE_FCV': 'Receive FCV',
+    'FCC_REWARD': 'FCC Reward (Earned)',
+    'FCC_SELL': 'FCC Sold',
+    'PROPERTY_INVESTMENT': 'Property Investment',
+    'FCC_LISTED': 'FCC Listed',
+    'FCC_LISTING_CANCELLED': 'FCC Listing Cancelled',
+    'WITHDRAW_FCV': 'Withdraw FCV',
+  };
+  return titleMap[apiType] || apiType;
+};
+
+// Format date and time
+const formatDateTime = (isoString: string): { date: string; time: string } => {
+  if (!isoString || isoString === '0001-01-01T00:00:00Z') {
+    return { date: 'N/A', time: 'N/A' };
+  }
+  
+  const date = new Date(isoString);
+  const dateOptions: Intl.DateTimeFormatOptions = { 
+    day: '2-digit', 
+    month: 'short', 
+    year: 'numeric' 
+  };
+  const timeOptions: Intl.DateTimeFormatOptions = { 
+    hour: '2-digit', 
+    minute: '2-digit',
+    hour12: true
+  };
+  
+  return {
+    date: date.toLocaleDateString('en-US', dateOptions),
+    time: date.toLocaleTimeString('en-US', timeOptions),
+  };
+};
+
+// Map API transaction to UI transaction
+const mapApiTransactionToUi = (apiTx: ApiTransaction): Transaction => {
+  const { date, time } = formatDateTime(apiTx.created_at);
+  const type = mapTransactionType(apiTx.type);
+  
+  return {
+    id: apiTx.id,
+    type,
+    title: getTransactionTitle(apiTx.type),
+    description: apiTx.description,
+    amount: apiTx.amount > 0 ? `+${apiTx.amount}` : `${apiTx.amount}`,
+    token: 'FCV', // Default to FCV, can be enhanced based on type
+    equivalentAmount: apiTx.amount > 0 ? `${apiTx.amount}` : undefined,
+    equivalentToken: 'AEDZ',
+    status: mapTransactionStatus(apiTx.status),
+    date,
+    time,
+    txId: apiTx.tx_hash,
+  };
+};
+
+const getTransactionIcon = (type: Transaction['type']) => {
+  switch (type) {
+    case 'convert':
+      return <RefreshCw className="w-5 h-5" />;
+    case 'send':
+      return <Send className="w-5 h-5" />;
+    case 'receive':
+      return <ArrowDownLeft className="w-5 h-5" />;
+    case 'reward':
+      return <Gift className="w-5 h-5" />;
+    case 'sell':
+      return <Gift className="w-5 h-5" />;
+    case 'investment':
+      return <Building2 className="w-5 h-5" />;
+    case 'listed':
+      return <List className="w-5 h-5" />;
+    case 'cancelled':
+      return <X className="w-5 h-5" />;
+    default:
+      return <RefreshCw className="w-5 h-5" />;
+  }
+};
+
+const getIconBgColor = (type: Transaction['type']) => {
+  switch (type) {
+    case 'convert':
+      return 'bg-purple-100 text-purple-600';
+    case 'send':
+      return 'bg-red-100 text-red-600';
+    case 'receive':
+      return 'bg-green-100 text-green-600';
+    case 'reward':
+      return 'bg-purple-100 text-purple-600';
+    case 'sell':
+      return 'bg-orange-100 text-orange-600';
+    case 'investment':
+      return 'bg-blue-100 text-blue-600';
+    case 'listed':
+      return 'bg-purple-100 text-purple-600';
+    case 'cancelled':
+      return 'bg-red-100 text-red-600';
+    default:
+      return 'bg-gray-100 text-gray-600';
+  }
+};
+
+const getStatusBadge = (status: Transaction['status']) => {
+  switch (status) {
+    case 'completed':
+      return (
+        <span className="px-3 py-1 bg-green-50 text-green-700 rounded-full text-xs font-medium border border-green-200">
+          Completed
+        </span>
+      );
+    case 'pending':
+      return (
+        <span className="px-3 py-1 bg-orange-50 text-orange-700 rounded-full text-xs font-medium border border-orange-200">
+          Pending
+        </span>
+      );
+    case 'failed':
+      return (
+        <span className="px-3 py-1 bg-red-50 text-red-700 rounded-full text-xs font-medium border border-red-200">
+          Failed
+        </span>
+      );
+    default:
+      return null;
+  }
+};
 
 export default function Dashboard({
   user,
@@ -41,17 +238,74 @@ export default function Dashboard({
   onConnectWallet,
   onDepositAndConvert,
   onTransferFCV,
+  onWithdraw,
   onLogout,
   isTransacting = false, 
 }: DashboardProps) {
   const [convertAmount, setConvertAmount] = useState('');
   const [transferAmount, setTransferAmount] = useState('');
+  const [withdrawAmount, setWithdrawAmount] = useState('');
   const [recipientAddress, setRecipientAddress] = useState('');
   const [isConverting, setIsConverting] = useState(false);
   const [isTransferring, setIsTransferring] = useState(false);
+  const [isWithdrawing, setIsWithdrawing] = useState(false);
   const [copiedWallet, setCopiedWallet] = useState(false);
   const [copiedFcv, setCopiedFcv] = useState(false);
   const [copiedFcc, setCopiedFcc] = useState(false);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [isLoadingTransactions, setIsLoadingTransactions] = useState(false);
+
+  // Fetch transactions from API
+  const fetchTransactions = async () => {
+    if (!user?.accessToken) return;
+    
+    setIsLoadingTransactions(true);
+    try {
+      const response = await fetch('http://localhost:3000/api/v1/wallet/transactions', {
+        headers: {
+          'Authorization': `Bearer ${user.accessToken}`,
+        },
+      });
+
+      const result = await response.json();
+
+      if (result.success && result.data) {
+        const mappedTransactions = result.data.map((apiTx: ApiTransaction) => 
+          mapApiTransactionToUi(apiTx)
+        );
+        setTransactions(mappedTransactions);
+      } else {
+        setTransactions([]);
+      }
+    } catch (error: any) {
+      console.error('Failed to fetch transactions:', error);
+      toast.error('Failed to load transaction history');
+      setTransactions([]);
+    } finally {
+      setIsLoadingTransactions(false);
+    }
+  };
+
+  // Fetch transactions on mount and when user changes
+  useEffect(() => {
+    if (user?.accessToken && isConnected) {
+      fetchTransactions();
+    }
+  }, [user?.accessToken, isConnected]);
+
+  // Refresh transactions when balances are updated
+  useEffect(() => {
+    if (user?.accessToken && isConnected) {
+      // Only refetch if we have actual balance data (not initial zeros)
+      const hasBalances = parseFloat(balances.fcv) > 0 || 
+                         parseFloat(balances.fcc) > 0 || 
+                         parseFloat(balances.AEDZ) > 0;
+      
+      if (hasBalances) {
+        fetchTransactions();
+      }
+    }
+  }, [balances.fcv, balances.fcc, balances.AEDZ]);
 
   const handleConvert = async () => {
     if (!convertAmount || parseFloat(convertAmount) <= 0) {
@@ -68,6 +322,8 @@ export default function Dashboard({
     try {
       await onDepositAndConvert(convertAmount);
       setConvertAmount('');
+      // Refetch transactions after successful conversion
+      setTimeout(() => fetchTransactions(), 2000);
     } catch (error) {
       console.error(error);
     } finally {
@@ -96,10 +352,36 @@ export default function Dashboard({
       await onTransferFCV(recipientAddress, transferAmount);
       setTransferAmount('');
       setRecipientAddress('');
+      // Refetch transactions after successful transfer
+      setTimeout(() => fetchTransactions(), 2000);
     } catch (error) {
       console.error(error);
     } finally {
       setIsTransferring(false);
+    }
+  };
+
+  const handleWithdraw = async () => {
+    if (!withdrawAmount || parseFloat(withdrawAmount) <= 0) {
+      toast.error('Please enter a valid amount');
+      return;
+    }
+
+    if (parseFloat(withdrawAmount) > parseFloat(balances.fcv)) {
+      toast.error('Insufficient FCV balance');
+      return;
+    }
+
+    setIsWithdrawing(true);
+    try {
+      await onWithdraw(withdrawAmount);
+      setWithdrawAmount('');
+      // Refetch transactions after successful withdrawal
+      setTimeout(() => fetchTransactions(), 2000);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setIsWithdrawing(false);
     }
   };
 
@@ -123,6 +405,12 @@ export default function Dashboard({
     }
     
     toast.success('Address copied!');
+  };
+
+  const handleViewDetails = (transaction: Transaction) => {
+    // This would open a modal or navigate to details page
+    console.log('View details for:', transaction);
+    toast.success(`Viewing details for ${transaction.title}`);
   };
 
   return (
@@ -205,15 +493,15 @@ export default function Dashboard({
               {/* FCV Balance */}
               <div className="bg-white rounded-2xl shadow-xl p-6 hover:shadow-2xl transition-shadow">
                 <div className="flex items-center justify-between mb-4">
-                  <span className="text-gray-600 text-sm font-medium">FCV Balance</span>
+                  <span className="text-gray-600 text-sm font-medium">FCC Balance</span>
                   <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
                     <span className="text-xl">🪙</span>
                   </div>
                 </div>
                 <div className="text-3xl font-bold text-gray-900 mb-1">
-                  {parseFloat(balances.fcv).toFixed(2)}
+                  {parseFloat(balances.fcc).toFixed(2)}
                 </div>
-                <div className="text-gray-500 text-sm mb-2">FCV (Solana)</div>
+                <div className="text-gray-500 text-sm mb-2">FCC (Solana)</div>
                 
                 {addresses.fcvAtaAddress && (
                   <div className="mt-3 p-2 bg-purple-50 rounded-lg border border-purple-200">
@@ -242,15 +530,15 @@ export default function Dashboard({
               {/* FCC Balance */}
               <div className="bg-white rounded-2xl shadow-xl p-6 hover:shadow-2xl transition-shadow">
                 <div className="flex items-center justify-between mb-4">
-                  <span className="text-gray-600 text-sm font-medium">FCC Balance</span>
+                  <span className="text-gray-600 text-sm font-medium">FCV Balance</span>
                   <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
                     <span className="text-xl">💎</span>
                   </div>
                 </div>
                 <div className="text-3xl font-bold text-gray-900 mb-1">
-                  {parseFloat(balances.fcc).toFixed(2)}
+                  {parseFloat(balances.fcv).toFixed(2)}
                 </div>
-                <div className="text-gray-500 text-sm mb-2">FCC (Solana)</div>
+                <div className="text-gray-500 text-sm mb-2">FCV (Solana)</div>
                 
                 {addresses.fccAtaAddress && (
                   <div className="mt-3 p-2 bg-green-50 rounded-lg border border-green-200">
@@ -278,7 +566,7 @@ export default function Dashboard({
             </div>
 
             {/* Actions */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
               {/* Convert AEDZ to FCV (Web3 Transaction) */}
               <div className="bg-white rounded-2xl shadow-xl p-8">
                 <div className="flex items-center gap-3 mb-6">
@@ -432,6 +720,187 @@ export default function Dashboard({
                   </p>
                 </div>
               </div>
+
+              {/* Withdraw FCV to AEDZ */}
+              <div className="bg-white rounded-2xl shadow-xl p-8">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="w-12 h-12 bg-gradient-to-br from-green-600 to-emerald-500 rounded-xl flex items-center justify-center">
+                    <ArrowDownToLine className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-gray-900">Withdraw FCV</h3>
+                    <p className="text-gray-600 text-sm">Convert FCV back to AEDZ</p>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-2 text-gray-700">
+                      Amount (FCV)
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        value={withdrawAmount}
+                        onChange={(e) => setWithdrawAmount(e.target.value)}
+                        placeholder="0.00"
+                        step="0.01"
+                        min="0"
+                        disabled={isWithdrawing}
+                        className="w-full px-4 py-3 pr-20 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+                      />
+                      <button
+                        onClick={() => setWithdrawAmount(balances.fcv)}
+                        disabled={isWithdrawing}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-indigo-600 text-sm font-semibold hover:text-purple-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        MAX
+                      </button>
+                    </div>
+                    <p className="text-gray-500 text-xs mt-2">
+                      Available: {parseFloat(balances.fcv).toFixed(2)} FCV
+                    </p>
+                    {withdrawAmount && (
+                      <div className="mt-3 p-3 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border border-green-200">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-gray-600">You will receive:</span>
+                          <span className="font-bold text-green-600">
+                            ≈ {(parseFloat(withdrawAmount)).toFixed(2)} AEDZ
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <button
+                    onClick={handleWithdraw}
+                    disabled={isWithdrawing || !withdrawAmount}
+                    className="w-full bg-gradient-to-r from-green-600 to-emerald-600 text-white py-4 rounded-xl font-semibold hover:from-green-700 hover:to-emerald-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    {isWithdrawing ? (
+                      <>
+                        <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        <span>Processing...</span>
+                      </>
+                    ) : (
+                      <>
+                        <ArrowDownToLine className="w-5 h-5" />
+                        <span>Withdraw FCV</span>
+                      </>
+                    )}
+                  </button>
+
+                  <p className="text-gray-500 text-xs text-center">
+                    FCV will be converted back to AEDZ in your wallet
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Transaction History */}
+            <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
+              <div className="p-6 border-b border-gray-200">
+                <h3 className="text-xl font-bold text-gray-900">Transaction History</h3>
+                <p className="text-gray-600 text-sm mt-1">View all your recent transactions and activities</p>
+              </div>
+              
+              {isLoadingTransactions ? (
+                <div className="flex items-center justify-center py-16">
+                  <div className="flex flex-col items-center gap-4">
+                    <div className="w-12 h-12 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
+                    <p className="text-gray-500 text-sm">Loading transactions...</p>
+                  </div>
+                </div>
+              ) : transactions.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 px-4">
+                  <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                    <List className="w-10 h-10 text-gray-400" />
+                  </div>
+                  <h4 className="text-lg font-semibold text-gray-900 mb-2">No Transactions Yet</h4>
+                  <p className="text-gray-500 text-sm text-center max-w-md">
+                    Your transaction history will appear here once you start converting, transferring, or withdrawing tokens.
+                  </p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-gray-50 border-b border-gray-200">
+                      <tr>
+                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Type
+                        </th>
+                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Description
+                        </th>
+                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Amount
+                        </th>
+                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Status
+                        </th>
+                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Date
+                        </th>
+                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Actions
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {transactions.map((transaction) => (
+                        <tr key={transaction.id} className="hover:bg-gray-50 transition-colors">
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex items-center gap-3">
+                              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${getIconBgColor(transaction.type)}`}>
+                                {getTransactionIcon(transaction.type)}
+                              </div>
+                              <span className="text-sm font-medium text-gray-900">{transaction.title}</span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div>
+                              <div className="text-sm text-gray-900">{transaction.description}</div>
+                              {transaction.propertyName && (
+                                <div className="text-xs text-gray-500 mt-1">{transaction.propertyName}</div>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div>
+                              <div className={`text-sm font-semibold ${transaction.amount.startsWith('+') ? 'text-green-600' : 'text-gray-900'}`}>
+                                {transaction.amount} {transaction.token}
+                              </div>
+                              {transaction.equivalentAmount && (
+                                <div className="text-xs text-gray-500 mt-1">
+                                  {transaction.equivalentAmount} {transaction.equivalentToken}
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            {getStatusBadge(transaction.status)}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div>
+                              <div className="text-sm text-gray-900">{transaction.date}</div>
+                              <div className="text-xs text-gray-500">{transaction.time}</div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <button
+                              onClick={() => handleViewDetails(transaction)}
+                              className="flex items-center gap-2 text-purple-600 hover:text-purple-700 text-sm font-medium transition-colors"
+                            >
+                              <Eye className="w-4 h-4" />
+                              View Details
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
 
             {/* Info Section */}

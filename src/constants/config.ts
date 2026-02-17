@@ -1,6 +1,10 @@
 export const ZERO_DEV_RPC_URL = import.meta.env.VITE_ZERO_DEV_RPC_URL;
+export const ZERO_DEV_RPC_URL_BSC = import.meta.env.VITE_ZERO_DEV_RPC_URL_BSC;
+export const ZERO_DEV_RPC_URL_POLYGON = import.meta.env.VITE_ZERO_DEV_RPC_URL_POLYGON;
+export const ZERO_DEV_RPC_URL_OPTIMISM = import.meta.env.VITE_ZERO_DEV_RPC_URL_OPTIMISM;
+export const ZERO_DEV_RPC_URL_ETH = import.meta.env.VITE_ZERO_DEV_RPC_URL_ETH;
+export const ZERO_DEV_RPC_URL_ARBITRIUM = import.meta.env.VITE_ZERO_DEV_RPC_URL_ARBITRIUM;
 export const ZERO_DEV_PASSKEY_SERVER_URL = import.meta.env.VITE_ZERO_DEV_PASSKEY_SERVER_URL;
-
 
 
 export const RELAY_LINK_API_URL =  import.meta.env.VITE_RELAY_LINK_API_URL;

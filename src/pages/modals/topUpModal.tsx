@@ -14,7 +14,7 @@ import {
 import {
     PublicKey,
 } from "@solana/web3.js";
-import { BASE_CHAIN_ID, RELAY_LINK_API_URL,  SUPPORTED_CHAINS_MAINNET, USDC_ADDRESS, } from '../../constants/config';
+import { BASE_CHAIN_ID, RELAY_LINK_API_URL, SUPPORTED_CHAINS_MAINNET, USDC_ADDRESS, } from '../../constants/config';
 import { mainnet, bsc, base, polygon, optimism, arbitrum, avalanche, monad, mantle, scroll } from 'viem/chains';
 import { createPublicClient, formatEther, http } from 'viem';
 
@@ -23,8 +23,8 @@ export default function TopUpModal({
     onClose,
     onDeposit,
     mode = 'topup',
-    address = '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb',
-    kernelClient,
+    kernelAccounts = {},
+    kernelClients = {},
     //@ts-ignore
     escrowService,
     //@ts-ignore
@@ -53,7 +53,7 @@ export default function TopUpModal({
     const [step, setStep] = useState('input');
     const [copiedAddress, setCopiedAddress] = useState(false);
     const [relayQuote, setRelayQuote]: any = useState({});
-     const [errorMessage, setErrorMessage]: any = useState({});
+    const [errorMessage, setErrorMessage]: any = useState({});
     const [recievingAmount, setRecievingAmount]: any = useState({});
     const [bridgeStatus, setBridgeStatus] = useState('');
     const [requestId, setRequestId] = useState('');
@@ -70,8 +70,14 @@ export default function TopUpModal({
     const isFundMode = mode === 'fund';
     const needsBridge = (selectedChain !== 8453 || (selectedToken?.symbol?.toUpperCase() !== 'USDC'));
 
-    const evmAddress = address;
+    // Get the kernel account and client for the selected chain
+    const currentKernelAccount = kernelAccounts[selectedChain];
+    const currentKernelClient = kernelClients[selectedChain];
+    const currentAddress = currentKernelAccount?.address || '';
 
+    // Get Base kernel account for receiving bridged funds
+    const baseKernelAccount = kernelAccounts[BASE_CHAIN_ID];
+    const baseAddress = baseKernelAccount?.address || '';
 
     // Fetch chains from Relay API
     useEffect(() => {
@@ -103,7 +109,7 @@ export default function TopUpModal({
 
     // Fetch balance when token or chain changes
     useEffect(() => {
-        if (!selectedToken || !selectedChain) return;
+        if (!selectedToken || !selectedChain || !currentAddress) return;
 
         const chainData = chains.find((c: any) => c.id === selectedChain);
         if (!chainData) return;
@@ -111,7 +117,7 @@ export default function TopUpModal({
         // Fetch balance based on token type
         fetchTokenBalance(selectedToken, chainData);
 
-    }, [selectedToken, selectedChain, chains]);
+    }, [selectedToken, selectedChain, chains, currentAddress]);
 
     const fetchTokenBalance = async (token: any, chainData: any) => {
         try {
@@ -168,7 +174,7 @@ export default function TopUpModal({
                 transport: http(chainData.httpRpcUrl),
             });
 
-            // ERC20 balanceOf function
+            // ERC20 balanceOf function - check current chain's smart account balance
             const balance = await publicClient.readContract({
                 address: token.address as `0x${string}`,
                 abi: [
@@ -181,7 +187,7 @@ export default function TopUpModal({
                     },
                 ],
                 functionName: 'balanceOf',
-                args: [address as `0x${string}`],
+                args: [currentAddress as `0x${string}`], // Use current chain's smart account
             });
 
             // Format balance based on token decimals
@@ -193,7 +199,7 @@ export default function TopUpModal({
                 : formatted.toFixed(6);
 
             setWalletBalance(Number(display));
-            console.log(`${token.symbol} balance:`, display);
+            console.log(`${token.symbol} balance on ${chainData.displayName}:`, display);
         } catch (error) {
             console.error('Error fetching ERC20 balance:', error);
             setWalletBalance(0);
@@ -254,7 +260,7 @@ export default function TopUpModal({
             });
 
             const rawBalance = await publicClient.getBalance({
-                address: address,
+                address: currentAddress as `0x${string}`, // Use current chain's smart account
             });
 
             const formatted = Number(formatEther(rawBalance));
@@ -265,6 +271,7 @@ export default function TopUpModal({
                     : formatted.toFixed(6);
 
             setWalletBalance(Number(display));
+            console.log(`Native balance on chain ${selectedChain}:`, display);
         } catch (error) {
             console.error('Failed to fetch native balance:', error);
             setWalletBalance(0);
@@ -320,13 +327,13 @@ export default function TopUpModal({
 
     // Fetch Relay quote when amount, chain, or token changes
     useEffect(() => {
-        if (isTopUpMode && needsBridge && amount && parseFloat(amount) > 0 && selectedToken) {
+        if (isTopUpMode && needsBridge && amount && parseFloat(amount) > 0 && selectedToken && baseAddress) {
             fetchRelayQuote();
         }
-    }, [amount, selectedChain, selectedToken, isTopUpMode]);
+    }, [amount, selectedChain, selectedToken, isTopUpMode, baseAddress]);
 
     const executeBridge = async () => {
-        if (!relayQuote || !kernelClient) {
+        if (!relayQuote || !currentKernelClient) {
             alert('Quote not available or wallet not connected');
             return;
         }
@@ -377,11 +384,12 @@ export default function TopUpModal({
         const { sign, post } = item.data;
         let signature: string;
 
+        // Use the kernel client for the source chain
         if (sign.signatureKind === 'eip191') {
             const message = sign.message;
-            signature = await kernelClient.signMessage({ message });
+            signature = await currentKernelClient.signMessage({ message });
         } else if (sign.signatureKind === 'eip712') {
-            signature = await kernelClient.signTypedData({
+            signature = await currentKernelClient.signTypedData({
                 domain: sign.domain,
                 types: sign.types,
                 primaryType: sign.primaryType,
@@ -416,18 +424,45 @@ export default function TopUpModal({
 
         const txData = item.data;
 
-        const hash = await kernelClient.sendTransaction({
-            account: kernelClient.account,
+        // Fetch current gas prices from the bundler to avoid "maxFeePerGas too low" errors
+        let maxFeePerGas = BigInt(txData.maxFeePerGas || '0');
+        let maxPriorityFeePerGas = BigInt(txData.maxPriorityFeePerGas || '0');
+
+        try {
+            const gasPriceResponse = await currentKernelClient.request({
+                method: 'pimlico_getUserOperationGasPrice',
+                params: [],
+            });
+
+            // Use the "fast" tier to ensure acceptance
+            const fast = gasPriceResponse?.fast;
+            if (fast?.maxFeePerGas) {
+                maxFeePerGas = BigInt(fast.maxFeePerGas);
+            }
+            if (fast?.maxPriorityFeePerGas) {
+                maxPriorityFeePerGas = BigInt(fast.maxPriorityFeePerGas);
+            }
+        } catch (gasPriceError) {
+            console.warn('Could not fetch bundler gas price, using quote values:', gasPriceError);
+        }
+        // After fetching gas prices, ensure we're at least 15% above the quote value
+        const quotedMaxFee = BigInt(txData.maxFeePerGas || '0');
+        const bufferedMaxFee = quotedMaxFee * 115n / 100n; // +15%
+        if (maxFeePerGas < bufferedMaxFee) {
+            maxFeePerGas = bufferedMaxFee;
+        }
+        const hash = await currentKernelClient.sendTransaction({
+            account: currentKernelAccount,
             to: txData.to as `0x${string}`,
             data: txData.data as `0x${string}`,
             value: BigInt(txData.value || '0'),
-            maxFeePerGas: BigInt(txData.maxFeePerGas || '0'),
-            maxPriorityFeePerGas: BigInt(txData.maxPriorityFeePerGas || '0'),
+            maxFeePerGas,
+            maxPriorityFeePerGas,
             gas: BigInt(txData.gas || '0'),
             chain: { id: txData.chainId }
         });
 
-        console.log('Transaction submitted:', hash);
+        console.log('Transaction submitted from', currentAddress, ':', hash);
         setBridgeStatus('Transaction submitted. Monitoring status...');
 
         if (step.requestId) {
@@ -476,19 +511,20 @@ export default function TopUpModal({
 
     const fetchRelayQuote = async () => {
         setIsLoadingQuote(true);
-        console.log("chain", selectedToken)
+        console.log("Fetching quote for chain", selectedChain, "token", selectedToken);
         try {
             const amountInBaseUnits = (
                 parseFloat(amount) * Math.pow(10, selectedToken.decimals)
             ).toString();
 
+            // User parameter is the destination address (Base smart account)
             const response = await fetch(`${RELAY_LINK_API_URL}/quote/v2`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    "user": address,
+                    "user": baseAddress, // Destination is Base smart account
                     "originChainId": selectedChain,
                     "destinationChainId": BASE_CHAIN_ID,
                     "originCurrency": selectedToken.address,
@@ -510,7 +546,7 @@ export default function TopUpModal({
             const receive = parseFloat(quote.fees.relayer.amountUsd) + parseFloat(quote.fees.relayerGas.amountUsd) + parseFloat(quote.fees.relayerService.amountUsd)
             const willGet = parseFloat(quote.details.currencyOut.amountUsd) - receive
             setRecievingAmount(willGet)
-        } catch (error:any) {
+        } catch (error: any) {
             console.error('Error fetching Relay quote:', error);
             setEstimatedFees(null);
             setErrorMessage(error.message);
@@ -527,6 +563,11 @@ export default function TopUpModal({
 
         if (isTopUpMode && parseFloat(amount) > walletBalance) {
             alert('Insufficient wallet balance');
+            return;
+        }
+
+        if (!currentKernelClient || !currentAddress) {
+            alert('Wallet not properly initialized for selected chain');
             return;
         }
 
@@ -554,13 +595,12 @@ export default function TopUpModal({
     };
 
     const copyAddress = () => {
-        const addr = selectedWallet === 'EVM' ? evmAddress : solanaAddress;
+        const addr = selectedWallet === 'EVM' ? currentAddress : solanaAddress;
         navigator.clipboard.writeText(addr);
         setCopiedAddress(true);
         setTimeout(() => setCopiedAddress(false), 2000);
     };
 
-    const currentAddress = selectedWallet === 'EVM' ? evmAddress : solanaAddress;
     const selectedChainData: any = chains.find((c: any) => c.id === selectedChain);
 
     if (isLoadingChains) {
@@ -586,6 +626,19 @@ export default function TopUpModal({
                         : 'Select your preferred chain and token to receive funds'
                     }
                 </p>
+
+                {/* Display current smart account address */}
+                {currentAddress && (
+                    <div className="mb-4 p-3 bg-indigo-50 rounded-lg border border-indigo-200">
+                        <p className="text-xs text-indigo-600 mb-1 font-medium">Your Smart Account Address</p>
+                        <p className="text-sm font-mono text-indigo-900 break-all">
+                            {currentAddress}
+                        </p>
+                        <p className="text-xs text-indigo-600 mt-1">
+                            ✨ Same address on all chains!
+                        </p>
+                    </div>
+                )}
 
                 {step === 'input' && (
                     <>
@@ -763,8 +816,8 @@ export default function TopUpModal({
                                     )}
                                     <p className={isTopUpMode ? 'text-blue-900' : 'text-green-900'}>
                                         {isTopUpMode
-                                            ? 'Funds will be bridged to Base and deposited to your card.'
-                                            : `Send ${selectedToken?.symbol || 'USDC'} on ${selectedChainData?.displayName || 'selected network'} to your address on the next screen.`
+                                            ? 'Funds will be bridged from your smart account to Base and deposited to your card.'
+                                            : `Send ${selectedToken?.symbol || 'USDC'} on ${selectedChainData?.displayName || 'selected network'} to your smart account address shown above.`
                                         }
                                     </p>
                                 </div>
@@ -782,7 +835,7 @@ export default function TopUpModal({
                             </button>
                             <button
                                 onClick={handleDeposit}
-                                disabled={isDepositing || !amount || (isLoadingQuote && needsBridge && isTopUpMode) || !selectedToken}
+                                disabled={isDepositing || !amount || (isLoadingQuote && needsBridge && isTopUpMode) || !selectedToken || !currentKernelClient}
                                 className="px-5 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 flex items-center space-x-2"
                             >
                                 {needsBridge && isTopUpMode ? (
@@ -811,12 +864,12 @@ export default function TopUpModal({
                                 Send {amount} {selectedToken?.symbol || 'USDC'}
                             </h3>
                             <p className="text-sm text-gray-600">
-                                To your {selectedWallet} wallet address on {selectedChainData?.displayName}
+                                To your smart account on {selectedChainData?.displayName}
                             </p>
                         </div>
 
                         <div className="bg-gray-50 rounded-xl p-4 mb-4">
-                            <p className="text-xs text-gray-500 mb-2">{selectedWallet} Address</p>
+                            <p className="text-xs text-gray-500 mb-2">Smart Account Address</p>
                             <div className="flex items-center justify-between bg-white rounded-lg p-3 border border-gray-200">
                                 <p className="font-mono text-sm text-gray-900 truncate flex-1">
                                     {currentAddress}
@@ -840,9 +893,18 @@ export default function TopUpModal({
                             </div>
                         </div>
 
+                        <div className="bg-blue-50 rounded-lg p-3 mb-4 border border-blue-200">
+                            <p className="text-sm text-blue-900 mb-2">
+                                ✨ <strong>Your address is the same on all chains!</strong>
+                            </p>
+                            <p className="text-xs text-blue-800">
+                                {currentAddress}
+                            </p>
+                        </div>
+
                         <div className="bg-yellow-50 rounded-lg p-3 mb-4">
                             <p className="text-sm text-yellow-900">
-                                <strong>Network:</strong> {selectedChainData?.displayName || 'Base Sepolia'}
+                                <strong>Network:</strong> {selectedChainData?.displayName}
                             </p>
                             <p className="text-sm text-yellow-900 mt-1">
                                 <strong>Token:</strong> {selectedToken?.symbol} ({selectedToken?.name})
