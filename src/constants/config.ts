@@ -4,8 +4,13 @@ export const ZERO_DEV_RPC_URL_POLYGON = import.meta.env.VITE_ZERO_DEV_RPC_URL_PO
 export const ZERO_DEV_RPC_URL_OPTIMISM = import.meta.env.VITE_ZERO_DEV_RPC_URL_OPTIMISM;
 export const ZERO_DEV_RPC_URL_ETH = import.meta.env.VITE_ZERO_DEV_RPC_URL_ETH;
 export const ZERO_DEV_RPC_URL_ARBITRIUM = import.meta.env.VITE_ZERO_DEV_RPC_URL_ARBITRIUM;
+export const ZERO_DEV_RPC_URL_AVALANCHE = import.meta.env.VITE_ZERO_DEV_RPC_URL_AVALANCHE;
+export const ZERO_DEV_RPC_URL_SCROLL = import.meta.env.VITE_ZERO_DEV_RPC_URL_SCROLL;
+export const ZERO_DEV_RPC_URL_MANTLE = import.meta.env.VITE_ZERO_DEV_RPC_URL_MANTLE;
 export const ZERO_DEV_PASSKEY_SERVER_URL = import.meta.env.VITE_ZERO_DEV_PASSKEY_SERVER_URL;
 
+
+export const FUTURE_CITY_API_URL=import.meta.env.VITE_FUTURE_CITY_API_URL
 
 export const RELAY_LINK_API_URL =  import.meta.env.VITE_RELAY_LINK_API_URL;
 

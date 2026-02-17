@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
-import { Wallet, Send, RefreshCw, Info, LogOut, Copy, Check, ArrowDownLeft, ArrowUpRight, Gift, Building2, List, X, Eye, ArrowDownToLine } from 'lucide-react';
+import { Wallet, Send, RefreshCw, Info, LogOut, Copy, Check, ArrowDownLeft,  Gift, Building2, List, X, Eye, ArrowDownToLine } from 'lucide-react';
 
 interface User {
   email?: string;

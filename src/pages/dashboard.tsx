@@ -10,9 +10,9 @@ import {
 } from "@web3auth/modal/react";
 import { useSolanaWallet } from "@web3auth/modal/react/solana";
 import { createPublicClient, http } from 'viem';
-import { base, bsc, polygon, arbitrum, optimism, avalanche, mainnet } from 'viem/chains';
+import { base, bsc, polygon, arbitrum, optimism, avalanche, mainnet, scroll, mantle } from 'viem/chains';
 import { EscrowService } from '../constants/escrowContract';
-import { ZERO_DEV_RPC_URL, ZERO_DEV_PASSKEY_SERVER_URL, USDC_ADDRESS, SUPPORTED_CHAINS_MAINNET, ZERO_DEV_RPC_URL_ETH, ZERO_DEV_RPC_URL_OPTIMISM, ZERO_DEV_RPC_URL_POLYGON, ZERO_DEV_RPC_URL_ARBITRIUM, ZERO_DEV_RPC_URL_BSC } from '../constants/config';
+import { ZERO_DEV_RPC_URL, ZERO_DEV_PASSKEY_SERVER_URL, USDC_ADDRESS, ZERO_DEV_RPC_URL_ETH, ZERO_DEV_RPC_URL_OPTIMISM, ZERO_DEV_RPC_URL_POLYGON, ZERO_DEV_RPC_URL_ARBITRIUM, ZERO_DEV_RPC_URL_BSC, ZERO_DEV_RPC_URL_SCROLL, ZERO_DEV_RPC_URL_MANTLE, ZERO_DEV_RPC_URL_AVALANCHE } from '../constants/config';
 import { LoginScreen } from './login';
 import { WithdrawModal } from './modals/withdrawal';
 import { mockTransactions, type Transaction, type User } from '../utils/types';
@@ -43,42 +43,61 @@ const HARDCODED_SPEND_AMOUNT = "25.00"; // $25 per transaction
 
 // Define supported chains with their RPC URLs
 const MULTICHAIN_CONFIG = [
-    { 
-        chain: base, 
-        name: 'Base', 
+    {
+        chain: base,
+        name: 'Base',
         rpcUrl: ZERO_DEV_RPC_URL, // Base uses main RPC
-        chainId: 8453 
+        chainId: 8453
     },
-        { 
-        chain: mainnet, 
-        name: 'ETH', 
-        rpcUrl: ZERO_DEV_RPC_URL_ETH, 
-        chainId: 56 
+    {
+        chain: mainnet,
+        name: 'ETH',
+        rpcUrl: ZERO_DEV_RPC_URL_ETH,
+        chainId: 56
     },
-    { 
-        chain: bsc, 
-        name: 'BSC', 
+    {
+        chain: bsc,
+        name: 'BSC',
         rpcUrl: ZERO_DEV_RPC_URL_BSC,
-        chainId: 56 
+        chainId: 56
     },
-    { 
-        chain: polygon, 
-        name: 'Polygon', 
-        rpcUrl: ZERO_DEV_RPC_URL_POLYGON, 
-        chainId: 137 
+    {
+        chain: polygon,
+        name: 'Polygon',
+        rpcUrl: ZERO_DEV_RPC_URL_POLYGON,
+        chainId: 137
     },
-    { 
-        chain: arbitrum, 
-        name: 'Arbitrum', 
-        rpcUrl: ZERO_DEV_RPC_URL_ARBITRIUM, 
-        chainId: 42161 
+    {
+        chain: arbitrum,
+        name: 'Arbitrum',
+        rpcUrl: ZERO_DEV_RPC_URL_ARBITRIUM,
+        chainId: 42161
     },
-    { 
-        chain: optimism, 
-        name: 'Optimism', 
-        rpcUrl: ZERO_DEV_RPC_URL_OPTIMISM, 
-        chainId: 10 
+    {
+        chain: avalanche,
+        name: 'Optimism',
+        rpcUrl: ZERO_DEV_RPC_URL_AVALANCHE,
+        chainId: 10
     },
+    {
+        chain: scroll,
+        name: 'Optimism',
+        rpcUrl: ZERO_DEV_RPC_URL_SCROLL,
+        chainId: 10
+    }, 
+    {
+        chain: mantle,
+        name: 'Optimism',
+        rpcUrl: ZERO_DEV_RPC_URL_MANTLE,
+        chainId: 10
+    },
+     {
+        chain: optimism,
+        name: 'Optimism',
+        rpcUrl: ZERO_DEV_RPC_URL_OPTIMISM,
+        chainId: 10
+    },
+
 ];
 
 export default function Dashboard() {
@@ -101,12 +120,13 @@ export default function Dashboard() {
     const [kernelAccounts, setKernelAccounts] = useState<Record<number, any>>({});
     const [kernelClients, setKernelClients] = useState<Record<number, any>>({});
     const [kernelAccount, setKernelAccount] = useState<any>(null); // Base account for backward compatibility
+    //@ts-ignore
     const [kernelClient, setKernelClient] = useState<any>(null); // Base client for backward compatibility
     const [isCreatingPasskey, setIsCreatingPasskey] = useState(false);
     const [passkeyCreated, setPasskeyCreated] = useState(false);
     const [passkeyLoginFailed, setPasskeyLoginFailed] = useState(false);
     const loginAttemptedRef = useRef(false);
-    
+
     const { connect, isConnected } = useWeb3AuthConnect();
     const { disconnect } = useWeb3AuthDisconnect();
     const { userInfo } = useWeb3AuthUser();
@@ -130,7 +150,7 @@ export default function Dashboard() {
     // Attempt to login with existing passkey (multi-chain)
     const attemptPasskeyLogin = async () => {
         if (!isConnected) return;
-        
+
         setIsLoading(true);
         try {
             const passkeyName = userInfo?.email || 'cardaedz-user';
@@ -197,9 +217,9 @@ export default function Dashboard() {
             });
 
             const service = new EscrowService(
-                clients[8453], 
-                accounts[8453].address, 
-                paymasterClient, 
+                clients[8453],
+                accounts[8453].address,
+                paymasterClient,
                 entryPoint
             );
             setEscrowService(service);
@@ -208,7 +228,7 @@ export default function Dashboard() {
             setPasskeyLoginFailed(false);
 
             await loadBalances(service);
-            
+
             console.log('Successfully logged in with passkey on all chains');
             console.log('Your address on all chains:', accounts[8453].address);
         } catch (error) {
@@ -289,9 +309,9 @@ export default function Dashboard() {
             });
 
             const service = new EscrowService(
-                clients[8453], 
-                accounts[8453].address, 
-                paymasterClient, 
+                clients[8453],
+                accounts[8453].address,
+                paymasterClient,
                 entryPoint
             );
             setEscrowService(service);
