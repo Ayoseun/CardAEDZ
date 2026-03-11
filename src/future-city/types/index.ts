@@ -182,7 +182,7 @@ export interface FCCListingDetail {
   listedFcc: number;
   soldFcc: number;
   remainingFcc: number;
-  priceInAedz: number;
+  fccPricePerAedz: number;
   totalValue: number;
   totalEarned: number;
   status: string;

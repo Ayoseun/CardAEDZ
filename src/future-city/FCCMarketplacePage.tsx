@@ -5,6 +5,7 @@ import {
   Info, Ban, RefreshCw, Eye, Pencil, Trash2, ChevronDown, Check,
 } from 'lucide-react';
 import type { MarketListing, ListingStatus, UserFccActivity, PlatformStats, MarketDepth } from './types';
+
 import {
   createListing, fetchAllListings,
   fetchUserActivity, fetchPlatformStats, fetchMarketDepth,
@@ -17,7 +18,6 @@ function fmt(n: number, decimals = 0) {
   return n.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
 }
 
-//@ts-ignore
 function StatusBadge({ status }: { status: ListingStatus }) {
   const map: Record<ListingStatus, { label: string; cls: string }> = {
     active: { label: 'Active', cls: 'bg-green-100  text-green-700' },
@@ -30,10 +30,10 @@ function StatusBadge({ status }: { status: ListingStatus }) {
   return <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${cls}`}>{label}</span>;
 }
 
-// Status badge matching screenshot exactly:
-// Active=green pill, Partially Sold=orange pill, Fully Sold=purple pill, Cancelled=gray pill
+// Suppress unused warning — StatusBadge is kept for potential reuse
+void StatusBadge;
+
 function ListingStatusBadge({ status, soldPct }: { status: ListingStatus; soldPct: number }) {
-  // Derive "Partially Sold" when active but has some sold
   const derived = status === 'active' && soldPct > 0 ? 'partially_sold' : status;
 
   const map: Record<string, { label: string; cls: string }> = {
@@ -63,8 +63,6 @@ function ListFCCModal({ fccBalance, aedzAddress = '', onClose, onList }: ListMod
   const [price, setPrice] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  //@ts-ignore
-  const [result, setResult] = useState<{ listingId: string; listedFcc: number; priceInAedz: number; status: string } | null>(null);
 
   const PCT_SHORTCUTS = ['25%', '50%', '75%', '100%'];
   const numAmount = parseFloat(amount) || 0;
@@ -78,19 +76,13 @@ function ListFCCModal({ fccBalance, aedzAddress = '', onClose, onList }: ListMod
   async function handleContinue() {
     if (step === 1) { setStep(2); return; }
 
-    // step === 2 → call API
     setLoading(true);
     setError(null);
     try {
-      // We call onList which returns void — but we need the response data here.
-      // So we call createListing directly inside the modal via the prop-passed handler
-      // by making onList return data; parent will also refresh on success.
       await onList(numAmount, numPrice, aedzAddress);
-      // If we reach here, success — show success screen with local data
-      setResult({ listingId: '—', listedFcc: numAmount, priceInAedz: numPrice, status: 'active' });
       setStep('success');
-    } catch (err: any) {
-      setError(err.message ?? 'Failed to create listing');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to create listing');
     } finally {
       setLoading(false);
     }
@@ -155,7 +147,6 @@ function ListFCCModal({ fccBalance, aedzAddress = '', onClose, onList }: ListMod
 
             <div className="px-6 py-5 space-y-4">
 
-              {/* Step 1 – enter amount + price */}
               {step === 1 && (
                 <>
                   <div>
@@ -192,7 +183,6 @@ function ListFCCModal({ fccBalance, aedzAddress = '', onClose, onList }: ListMod
                 </>
               )}
 
-              {/* Step 2 – confirm */}
               {step === 2 && (
                 <>
                   <div className="bg-purple-50 rounded-2xl p-5 text-center">
@@ -228,7 +218,6 @@ function ListFCCModal({ fccBalance, aedzAddress = '', onClose, onList }: ListMod
               )}
             </div>
 
-            {/* Footer */}
             <div className="px-6 pb-6 flex gap-2">
               {step === 2 && (
                 <button onClick={() => { setStep(1); setError(null); }}
@@ -270,10 +259,8 @@ function ViewListingModal({ listing, onClose, onEdit, onCancel }: ViewListingMod
   const isEditable = listing.status === 'active' || listing.status === 'pending';
   const canEdit = listing.isOwn && isEditable;
 
-
-  // Mock timeline — replace with API data when available
   const timeline = [
-    { label: 'Listing created', detail: `Total FCC Listed: ${fmt(listing.fccAmount)} FCC\nListing price: ${listing.price.toFixed(2)} AEDZ`, time: listing.dateTime },
+    { label: 'Listing created', detail: `Total FCC Listed: ${fmt(listing.fccAmount)} FCC\nListing price: ${listing.price} AEDZ`, time: listing.dateTime },
   ];
 
   return (
@@ -282,13 +269,11 @@ function ViewListingModal({ listing, onClose, onEdit, onCancel }: ViewListingMod
       onClick={onClose}>
       <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
 
-        {/* Header */}
         <div className="flex items-center justify-between px-5 pt-5 pb-3">
           <p className="text-xs font-medium text-gray-400">FCC Listed</p>
           <button onClick={onClose} className="p-1.5 hover:bg-gray-100 rounded-full"><X className="w-4 h-4 text-gray-400" /></button>
         </div>
 
-        {/* Icon + amount */}
         <div className="flex flex-col items-center pb-4 px-5">
           <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center mb-3">
             <svg className="w-7 h-7 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -303,7 +288,6 @@ function ViewListingModal({ listing, onClose, onEdit, onCancel }: ViewListingMod
 
         <div className="px-5 pb-5 space-y-4">
 
-          {/* Meta grid */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <p className="text-xs text-gray-400 mb-0.5">Listing ID</p>
@@ -323,10 +307,9 @@ function ViewListingModal({ listing, onClose, onEdit, onCancel }: ViewListingMod
             </div>
           </div>
 
-          {/* Details rows */}
           <div className="border border-gray-100 rounded-xl divide-y divide-gray-50">
             {[
-              ['Price Per Listed', `${listing.price.toFixed(2)} AEDZ`],
+              ['Price Per Listed', `${listing.price} AEDZ`],
               ['FCC Listed', `${fmt(listing.fccAmount)} FCC`],
               ['FCC Sold', `${fmt(soldFcc)} FCC`],
               ['Remaining FCC:', `${fmt(remaining)} FCC`],
@@ -342,7 +325,6 @@ function ViewListingModal({ listing, onClose, onEdit, onCancel }: ViewListingMod
             </div>
           </div>
 
-          {/* Sale Progress */}
           <div className="bg-violet-50 rounded-xl p-3">
             <div className="flex justify-between mb-2">
               <p className="text-xs font-semibold text-gray-700">Sale Progress</p>
@@ -357,7 +339,6 @@ function ViewListingModal({ listing, onClose, onEdit, onCancel }: ViewListingMod
             </div>
           </div>
 
-          {/* Timeline */}
           <div>
             <p className="text-xs font-semibold text-gray-500 mb-3 flex items-center gap-1.5">
               <span className="w-3.5 h-3.5 rounded-full border-2 border-gray-300 inline-block" />
@@ -384,7 +365,6 @@ function ViewListingModal({ listing, onClose, onEdit, onCancel }: ViewListingMod
             </div>
           </div>
 
-          {/* Footer actions */}
           {canEdit && (
             <div className="grid grid-cols-2 gap-3 pt-2 border-t border-gray-100">
               <button onClick={onEdit}
@@ -434,7 +414,6 @@ function EditListingModal({ listing, fccBalance, onClose, onSave }: EditListingM
       onClick={onClose}>
       <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm" onClick={e => e.stopPropagation()}>
 
-        {/* Header */}
         <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-gray-100">
           <div>
             <h3 className="text-base font-bold text-gray-900">Edit Listing</h3>
@@ -445,12 +424,11 @@ function EditListingModal({ listing, fccBalance, onClose, onSave }: EditListingM
 
         <div className="px-5 py-4 space-y-4">
 
-          {/* Current listing summary */}
           <div className="bg-gray-50 rounded-xl p-3 space-y-1.5">
             <p className="text-xs font-semibold text-gray-500 mb-2">Current Listing</p>
             {[
               ['FCC Amount', `${fmt(listing.fccAmount)} FCC`],
-              ['Current Price', `${listing.price.toFixed(2)} AEDZ/FCC`],
+              ['Current Price', `${listing.price} AEDZ/FCC`],
               ['FCC Sold', `${fmt(soldFcc)} FCC`],
             ].map(([k, v]) => (
               <div key={k} className="flex justify-between">
@@ -460,7 +438,6 @@ function EditListingModal({ listing, fccBalance, onClose, onSave }: EditListingM
             ))}
           </div>
 
-          {/* FCC Amount input */}
           <div>
             <div className="flex justify-between mb-1">
               <label className="text-xs font-medium text-gray-500">FCC Amount</label>
@@ -483,7 +460,6 @@ function EditListingModal({ listing, fccBalance, onClose, onSave }: EditListingM
             </div>
           </div>
 
-          {/* FCV Price input */}
           <div>
             <label className="text-xs font-medium text-gray-500 block mb-1">FCV Price per FCC (AEDZ)</label>
             <input type="number" value={newPrice} onChange={e => setNewPrice(e.target.value)}
@@ -491,7 +467,6 @@ function EditListingModal({ listing, fccBalance, onClose, onSave }: EditListingM
               className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-purple-400 focus:border-transparent" />
           </div>
 
-          {/* Summary */}
           <div className="space-y-1.5">
             {[
               ['FCC Amount to list', `${fmt(numAmount)} FCC`],
@@ -525,16 +500,21 @@ function EditListingModal({ listing, fccBalance, onClose, onSave }: EditListingM
 
 // ─── Cancel Listing Modal ─────────────────────────────────────────────────────
 
+interface CancelListingResult {
+  returnedFcc?: number;
+  newFccBalance?: number;
+}
+
 interface CancelModalProps {
   listing: MarketListing;
   onClose: () => void;
-  onConfirm: () => Promise<{ returnedFcc?: number; newFccBalance?: number } | undefined>;
+  onConfirm: () => Promise<CancelListingResult | undefined>;
 }
 
 function CancelListingModal({ listing, onClose, onConfirm }: CancelModalProps) {
   const [done, setDone] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
-  const [cancelResult, setCancelResult] = useState<{ returnedFcc?: number; newFccBalance?: number } | undefined>();
+  const [cancelResult, setCancelResult] = useState<CancelListingResult | undefined>();
 
   const soldFcc = listing.fccAmount - (listing.remaining ?? listing.fccAmount);
   const lostFee = soldFcc * listing.price * 0.05;
@@ -559,7 +539,7 @@ function CancelListingModal({ listing, onClose, onConfirm }: CancelModalProps) {
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
         style={{ backgroundColor: 'rgba(10,10,20,0.65)', backdropFilter: 'blur(6px)' }}
         onClick={onClose}>
-        <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 text-center" onClick={e => e.stopPropagation()}>
+        <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 text-center" onClick={e => e.stopPropagation()}>
           <button onClick={onClose} className="absolute top-4 right-4 p-1.5 hover:bg-gray-100 rounded-full"><X className="w-4 h-4 text-gray-400" /></button>
 
           <div className="w-14 h-14 rounded-full bg-gradient-to-br from-violet-400 to-purple-600 flex items-center justify-center mx-auto mb-4">
@@ -610,13 +590,13 @@ function CancelListingModal({ listing, onClose, onConfirm }: CancelModalProps) {
         </div>
 
         <h3 className="text-xl font-bold text-gray-900 mb-1">Cancel Listing</h3>
-        <p className="text-gray-400 text-sm mb-4">Are you sure you want to cancel this listing? This action cannot be undone and cannot be reversed.</p>
+        <p className="text-gray-400 text-sm mb-4">Are you sure you want to cancel this listing? This action cannot be undone.</p>
 
         <div className="bg-gray-50 rounded-xl p-4 text-sm space-y-2 mb-4">
           {[
             ['Total FCC Listed', `${fmt(listing.fccAmount)} FCC`],
             ['FCC Reward Fees', `-${fmt(lostFee, 2)} FCC`],
-            ['Listing Price', `${listing.price.toFixed(2)} AEDZ`],
+            ['Listing Price', `${listing.price} AEDZ`],
             ['Total FCC to be Returned', `${fmt(toReturn)} FCC`],
           ].map(([k, v]) => (
             <div key={k} className={`flex justify-between ${k === 'Total FCC to be Returned' ? 'border-t border-gray-200 pt-2 font-semibold' : ''}`}>
@@ -626,7 +606,6 @@ function CancelListingModal({ listing, onClose, onConfirm }: CancelModalProps) {
           ))}
         </div>
 
-        {/* What happens when you cancel */}
         <div className="bg-amber-50 rounded-xl p-3 text-xs text-amber-700 space-y-1 mb-5">
           <p className="font-semibold">What happens when you cancel:</p>
           <p>• Your listing will be immediately removed from the marketplace</p>
@@ -688,8 +667,9 @@ export default function FCCMarketplacePage({
   // ── Modal state ──────────────────────────────────────────────────────────
   const [showListModal, setShowListModal] = useState(false);
   const [viewListing, setViewListing] = useState<MarketListing | null>(null);
-  const [editListing, setEditListing] = useState<MarketListing | null>(null);
-  const [cancelListing, setCancelListing] = useState<MarketListing | null>(null);
+  const [editingListing, setEditingListing] = useState<MarketListing | null>(null);
+  // Renamed from cancelListing → cancelTarget to avoid shadowing the imported apiCancelListing
+  const [cancelTarget, setCancelTarget] = useState<MarketListing | null>(null);
 
   // ── Listings state ───────────────────────────────────────────────────────
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('');
@@ -708,7 +688,7 @@ export default function FCCMarketplacePage({
   const [marketDepth, setMarketDepth] = useState<MarketDepth | null>(null);
   const [statsLoading, setStatsLoading] = useState(false);
 
-  // ── Load stats (activity, platform stats, depth) ─────────────────────────
+  // ── Load stats ────────────────────────────────────────────────────────────
   const loadStats = useCallback(async () => {
     if (!accessToken) return;
     setStatsLoading(true);
@@ -727,7 +707,6 @@ export default function FCCMarketplacePage({
   }, [accessToken, apiUrl]);
 
   // ── Load listings ─────────────────────────────────────────────────────────
-  // reqId guards against stale responses when filter/page changes quickly.
   const listingsReqId = useRef(0);
 
   const loadListings = useCallback(async () => {
@@ -735,17 +714,16 @@ export default function FCCMarketplacePage({
     const reqId = ++listingsReqId.current;
     setListingsLoading(true);
     setListingsError(null);
-    setListings([]); // clear stale rows immediately so no old filter bleeds through
+    setListings([]);
     try {
-      // partially_sold is a frontend-only concept (active + some sold); send 'active' to API
       const apiStatus = statusFilter === 'partially_sold' ? 'active' : (statusFilter || undefined);
       const result = await fetchAllListings({ page, limit: PAGE_SIZE, status: apiStatus, accessToken, apiUrl, userId });
-      if (reqId !== listingsReqId.current) return; // a newer request is in-flight; discard
+      if (reqId !== listingsReqId.current) return;
       setListings(result.listings);
       setTotalPages(result.totalPages);
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (reqId !== listingsReqId.current) return;
-      setListingsError(err.message ?? 'Failed to load listings');
+      setListingsError(err instanceof Error ? err.message : 'Failed to load listings');
     } finally {
       if (reqId === listingsReqId.current) setListingsLoading(false);
     }
@@ -754,7 +732,7 @@ export default function FCCMarketplacePage({
   useEffect(() => { loadStats(); }, [loadStats]);
   useEffect(() => { loadListings(); }, [loadListings]);
 
-  // ── Close dropdown on outside click ─────────────────────────────────────────
+  // ── Close dropdown on outside click ──────────────────────────────────────
   useEffect(() => {
     function handleClick(e: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
@@ -785,7 +763,6 @@ export default function FCCMarketplacePage({
       accessToken,
       apiUrl,
     );
-    // Refresh in background after success — modal shows its own success screen
     loadListings();
     loadStats();
   }
@@ -800,28 +777,28 @@ export default function FCCMarketplacePage({
         apiUrl,
       );
       toast.success('Listing updated!');
-      setEditListing(null);
+      setEditingListing(null);
       loadListings();
       loadStats();
-    } catch (err: any) {
-      toast.error(err.message ?? 'Failed to update listing');
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update listing');
     }
   }
 
-  async function handleCancelConfirm(listing: MarketListing) {
-    if (!accessToken) return;
+  async function handleCancelConfirm(listing: MarketListing): Promise<CancelListingResult | undefined> {
+    if (!accessToken) return undefined;
     try {
       const result = await apiCancelListing(listing.listingId, accessToken, apiUrl);
-      // Pass cancel result back to the modal for the success screen
       return result;
-    } catch (err: any) {
-      toast.error(err.message ?? 'Failed to cancel listing');
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to cancel listing');
       throw err;
     }
   }
 
+  // Called when the cancel modal fully closes (after success screen dismissed)
   function handleCancelDone() {
-    setCancelListing(null);
+    setCancelTarget(null);
     loadListings();
     loadStats();
   }
@@ -886,7 +863,6 @@ export default function FCCMarketplacePage({
       {/* ── Platform Statistics + Market Depth ─────────────────────────────── */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 flex overflow-hidden">
 
-        {/* LEFT: Platform Statistics */}
         <div className="w-72 flex-shrink-0 p-6 border-r border-gray-100">
           <h3 className="text-base font-bold text-gray-900 mb-0.5">Platform Statistics</h3>
           <p className="text-xs text-gray-400 mb-6">Key metrics showing FCC performance</p>
@@ -966,7 +942,7 @@ export default function FCCMarketplacePage({
                 <div>
                   <p className="text-xs text-gray-400 leading-none mb-1">30-Day Avg Buyback Price</p>
                   <p className="text-lg font-bold text-gray-900 leading-none">
-                    {platformStats.avgBuybackPrice30d.toFixed(2)}
+                    {platformStats.avgBuybackPrice30d}
                     <span className="text-xs font-semibold text-gray-400 ml-1">AEDZ</span>
                   </p>
                 </div>
@@ -976,7 +952,6 @@ export default function FCCMarketplacePage({
           )}
         </div>
 
-        {/* RIGHT: Market Depth */}
         <div className="flex-1 p-6">
           <h3 className="text-base font-bold text-gray-900 mb-0.5">Market Depth</h3>
           <p className="text-xs text-gray-400 mb-5">This is a read only view of current FCC sell orders listed by all users</p>
@@ -999,7 +974,7 @@ export default function FCCMarketplacePage({
             </div>
           ) : (
             <div className="space-y-2.5">
-              {(marketDepth?.buyOrders ?? []).map((o:any, i:number) => (
+              {(marketDepth?.buyOrders ?? []).map((o, i) => (
                 <div key={i} className="border border-gray-100 rounded-xl px-4 py-3.5 flex items-start">
                   <div className="flex-1">
                     <p className="text-xs text-gray-400 mb-1">FCC Amount</p>
@@ -1007,7 +982,7 @@ export default function FCCMarketplacePage({
                   </div>
                   <div className="flex-1">
                     <p className="text-xs text-gray-400 mb-1">Price</p>
-                    <p className="text-sm font-bold text-green-500">{o.price.toFixed(2)} AEDZ</p>
+                    <p className="text-sm font-bold text-green-500">{(o.price ?? 0).toFixed(2)} AEDZ</p>
                   </div>
                   <div className="flex-1">
                     <p className="text-xs text-gray-400 mb-1">Date & Time</p>
@@ -1015,7 +990,7 @@ export default function FCCMarketplacePage({
                   </div>
                   <div className="flex-1 text-right">
                     <p className="text-xs text-gray-400 mb-1">Total Value</p>
-                    <p className="text-sm font-bold text-gray-900">{fmt(o.totalValue)} AEDZ</p>
+                    <p className="text-sm font-bold text-gray-900">{fmt(o.totalValue ?? 0)} AEDZ</p>
                   </div>
                 </div>
               ))}
@@ -1024,8 +999,6 @@ export default function FCCMarketplacePage({
         </div>
 
       </div>
-
-
 
       {/* ── My FCC Listings table ─────────────────────────────────────────── */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
@@ -1043,7 +1016,6 @@ export default function FCCMarketplacePage({
                 className="pl-8 pr-3 py-2 text-xs border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-300 w-44"
               />
             </div>
-            {/* Dropdown filter */}
             <div className="relative" ref={dropdownRef}>
               <button
                 onClick={() => setDropdownOpen(o => !o)}
@@ -1082,7 +1054,6 @@ export default function FCCMarketplacePage({
           </div>
         </div>
 
-        {/* Table */}
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
@@ -1124,15 +1095,11 @@ export default function FCCMarketplacePage({
                         <List className="w-6 h-6 text-purple-300" />
                       </div>
                       <p className="text-gray-500 font-medium text-sm">No Active Listing</p>
-                      <p className="text-gray-400 text-xs mt-1">
-                        {"No listings found. Try a different filter or create a new listing."}
-                      </p>
-                      {(
-                        <button onClick={() => setShowListModal(true)}
-                          className="mt-4 px-4 py-2 bg-gradient-to-r from-violet-500 to-purple-600 text-white rounded-xl text-xs font-semibold">
-                          List FCC for Sale
-                        </button>
-                      )}
+                      <p className="text-gray-400 text-xs mt-1">No listings found. Try a different filter or create a new listing.</p>
+                      <button onClick={() => setShowListModal(true)}
+                        className="mt-4 px-4 py-2 bg-gradient-to-r from-violet-500 to-purple-600 text-white rounded-xl text-xs font-semibold">
+                        List FCC for Sale
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -1149,22 +1116,18 @@ export default function FCCMarketplacePage({
                   return (
                     <tr key={listing.id} className="border-b border-gray-50 hover:bg-gray-50/60 transition-colors">
 
-                      {/* Listing ID */}
                       <td className="py-5 pr-8">
                         <span className="font-semibold text-gray-800 text-sm">{listing.listingId}</span>
                       </td>
 
-                      {/* Price — green */}
                       <td className="py-5 pr-8">
-                        <span className="font-semibold text-green-500 text-sm">{listing.price.toFixed(2)}</span>
+                        <span className="font-semibold text-green-500 text-sm">{listing.price}</span>
                       </td>
 
-                      {/* Listed FCC */}
                       <td className="py-5 pr-8">
                         <span className="font-semibold text-gray-800 text-sm">{fmt(listing.fccAmount)}</span>
                       </td>
 
-                      {/* Sold fraction + striped progress bar */}
                       <td className="py-5 pr-8">
                         <div className="flex flex-col gap-1.5">
                           <span className="text-gray-500 text-xs">{fmt(soldFcc)}/{fmt(listing.fccAmount)}</span>
@@ -1180,58 +1143,48 @@ export default function FCCMarketplacePage({
                         </div>
                       </td>
 
-                      {/* Date & Time */}
                       <td className="py-5 pr-8">
                         <span className="text-gray-600 text-sm whitespace-nowrap">{listing.dateTime}</span>
                       </td>
 
-                      {/* Status */}
                       <td className="py-5 pr-8">
                         <ListingStatusBadge status={listing.status} soldPct={soldPct} />
                       </td>
 
-                   {/* Actions */}
-<td className="py-5">
-  {listing.isOwn && (
-    <div className="flex items-center gap-1.5">
-
-      {/* View */}
-      <button
-        onClick={() => setViewListing(listing)}
-        title="View listing"
-        className="w-8 h-8 flex items-center justify-center rounded-lg border border-violet-200 text-violet-600 hover:bg-violet-50 hover:border-violet-300 transition-colors">
-        <Eye className="w-3.5 h-3.5" />
-      </button>
-
-      {/* Edit */}
-      <button
-        onClick={canEdit ? () => setEditListing(listing) : undefined}
-        title={canEdit ? 'Edit listing' : 'Cannot edit this listing'}
-        disabled={!canEdit}
-        className={`w-8 h-8 flex items-center justify-center rounded-lg border transition-colors ${
-          canEdit
-            ? 'border-gray-300 text-gray-800 hover:bg-gray-100 hover:border-gray-400 cursor-pointer'
-            : 'border-gray-300 text-gray-400 cursor-not-allowed'
-        }`}>
-        <Pencil className="w-3.5 h-3.5" />
-      </button>
-
-      {/* Delete */}
-      <button
-        onClick={canCancel ? () => setCancelListing(listing) : undefined}
-        title={canCancel ? 'Delete listing' : 'Cannot delete this listing'}
-        disabled={!canCancel}
-        className={`w-8 h-8 flex items-center justify-center rounded-lg border transition-colors ${
-          canCancel
-            ? 'border-red-200 text-red-500 hover:bg-red-50 hover:border-red-400 cursor-pointer'
-            : 'border-gray-300 text-gray-400 cursor-not-allowed'
-        }`}>
-        <Trash2 className="w-3.5 h-3.5" />
-      </button>
-
-    </div>
-  )}
-</td>
+                      <td className="py-5">
+                        {listing.isOwn && (
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              onClick={() => setViewListing(listing)}
+                              title="View listing"
+                              className="w-8 h-8 flex items-center justify-center rounded-lg border border-violet-200 text-violet-600 hover:bg-violet-50 hover:border-violet-300 transition-colors">
+                              <Eye className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={canEdit ? () => setEditingListing(listing) : undefined}
+                              title={canEdit ? 'Edit listing' : 'Cannot edit this listing'}
+                              disabled={!canEdit}
+                              className={`w-8 h-8 flex items-center justify-center rounded-lg border transition-colors ${
+                                canEdit
+                                  ? 'border-gray-300 text-gray-800 hover:bg-gray-100 hover:border-gray-400 cursor-pointer'
+                                  : 'border-gray-300 text-gray-400 cursor-not-allowed'
+                              }`}>
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={canCancel ? () => setCancelTarget(listing) : undefined}
+                              title={canCancel ? 'Delete listing' : 'Cannot delete this listing'}
+                              disabled={!canCancel}
+                              className={`w-8 h-8 flex items-center justify-center rounded-lg border transition-colors ${
+                                canCancel
+                                  ? 'border-red-200 text-red-500 hover:bg-red-50 hover:border-red-400 cursor-pointer'
+                                  : 'border-gray-300 text-gray-400 cursor-not-allowed'
+                              }`}>
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        )}
+                      </td>
                     </tr>
                   );
                 })
@@ -1240,7 +1193,6 @@ export default function FCCMarketplacePage({
           </table>
         </div>
 
-        {/* Pagination */}
         {totalPages > 1 && (
           <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-100">
             <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
@@ -1268,34 +1220,34 @@ export default function FCCMarketplacePage({
         <ListFCCModal
           fccBalance={fccBalance}
           aedzAddress={walletAddress}
-          onClose={() => { setShowListModal(false); }}
+          onClose={() => setShowListModal(false)}
           onList={handleList}
         />
       )}
 
-      {viewListing && !editListing && !cancelListing && (
+      {viewListing && !editingListing && !cancelTarget && (
         <ViewListingModal
           listing={viewListing}
           onClose={() => setViewListing(null)}
-          onEdit={() => { setEditListing(viewListing); setViewListing(null); }}
-          onCancel={() => { setCancelListing(viewListing); setViewListing(null); }}
+          onEdit={() => { setEditingListing(viewListing); setViewListing(null); }}
+          onCancel={() => { setCancelTarget(viewListing); setViewListing(null); }}
         />
       )}
 
-      {editListing && (
+      {editingListing && (
         <EditListingModal
-          listing={editListing}
+          listing={editingListing}
           fccBalance={fccBalance}
-          onClose={() => setEditListing(null)}
+          onClose={() => setEditingListing(null)}
           onSave={handleEditSave}
         />
       )}
 
-      {cancelListing && (
+      {cancelTarget && (
         <CancelListingModal
-          listing={cancelListing}
+          listing={cancelTarget}
           onClose={handleCancelDone}
-          onConfirm={() => handleCancelConfirm(cancelListing)}
+          onConfirm={() => handleCancelConfirm(cancelTarget)}
         />
       )}
     </div>

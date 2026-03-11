@@ -1,4 +1,3 @@
-
 // ─── Base fetcher ──────────────────────────────────────────────────────────────
 
 import type { FCCListingDetail, ListingStatus, MarketDepth, MarketListing, PlatformStats, UserFccActivity } from "./types";
@@ -20,7 +19,7 @@ async function apiFetch<T>(
   if (!res.ok || json.success === false) {
     throw new Error(json.message ?? `API error ${res.status}`);
   }
-  return json;
+  return json as T;
 }
 
 // ─── Raw API shapes (from confirmed payloads) ──────────────────────────────────
@@ -29,7 +28,7 @@ async function apiFetch<T>(
 export interface CreateListingPayload {
   fcc_amount: number;
   price_aedz: number;
-  aedz_address: string;  // confirmed required field
+  aedz_address: string;
 }
 
 export interface ApiCreateListingResponse {
@@ -47,7 +46,7 @@ export interface ApiCreateListingResponse {
   };
 }
 
-/** GET /api/v1/marketplace/listings  (paginated list) */
+/** GET /api/v1/marketplace/my-listings  (paginated list of current user's listings) */
 export interface ApiListingsResponse {
   success: boolean;
   data: ApiListing[];
@@ -60,9 +59,9 @@ export interface ApiListingsResponse {
 }
 
 export interface ApiListing {
-  listingId: string;
+  id: string;
   userId: string;
-  priceInAedz: number;
+  fccPricePerAedz: number;
   listedFcc: number;
   soldFcc: number;
   remainingFcc?: number;
@@ -72,30 +71,23 @@ export interface ApiListing {
   isOwn?: boolean;
 }
 
-/** GET /api/v1/marketplace/listings/my  (current user's listings) */
-export type ApiMyListingsResponse = ApiListingsResponse;
-
-/** GET /api/v1/marketplace/activity  (user FCC activity stats)
- *  Confirmed payload:
- *  { walletAddress, fccBalance, totalFccsold, earningsAedz,
- *    activeListings, totalFccListed, rewardTokens }
- */
+/** GET /api/v1/marketplace/activity  (user FCC activity stats) */
 export interface ApiActivityResponse {
   statusCode: number;
   success: boolean;
   message: string;
   data: {
     walletAddress: string;
-    fccBalance: number;   // FCC held in wallet (not listed)
-    totalFccsold: number;   // camelCase — lowercase 's' confirmed
-    earningsAedz: number;   // AEDZ earned from buybacks
-    activeListings: number;   // listings with status=active
-    totalFccListed: number;   // FCC across all active listings
+    fccBalance: number;
+    totalFccsold: number;   // lowercase 's' confirmed
+    earningsAedz: number;
+    activeListings: number;
+    totalFccListed: number;
     rewardTokens: number;
   };
 }
 
-/** GET /api/v1/marketplace/stats  — mirrors Go PlatformStatsSummary */
+/** GET /api/v1/marketplace/stats */
 export interface ApiPlatformStatsResponse {
   statusCode: number;
   success: boolean;
@@ -109,30 +101,27 @@ export interface ApiPlatformStatsResponse {
   };
 }
 
-/** GET /api/v1/marketplace/listings/:id  — mirrors Go GetFCCListingDetailResponse */
+/** GET /api/v1/marketplace/listings/:id */
 export interface ApiListingDetailResponse {
   statusCode: number;
   success: boolean;
   message: string;
-  detail: FCCListingDetail;
+  data: FCCListingDetail;   // key is "data", not "detail"
 }
 
-/** GET /api/v1/marketplace/depth
- *  Confirmed payload: data is a flat array:
- *  [{ priceInAedz: 1.25, fccAmount: 6940, dateTime: "2026-...", totalValue: 8675 }]
- */
+/** GET /api/v1/marketplace/depth */
 export interface ApiDepthOrder {
-  priceInAedz: number;  // price per FCC in AEDZ
-  fccAmount: number;  // FCC amount in this order
-  dateTime: string;  // ISO 8601 with timezone offset
-  totalValue: number;  // fccAmount * priceInAedz
+  priceInAedz: number;
+  fccAmount: number;
+  timeStamp: string;
+  totalValue: number;
 }
 
 export interface ApiMarketDepthResponse {
   statusCode: number;
   success: boolean;
   message: string;
-  data: ApiDepthOrder[];   // flat array, not { buyOrders, sellOrders }
+  data: ApiDepthOrder[];
 }
 
 /** PATCH /api/v1/marketplace/listings/:id */
@@ -154,21 +143,24 @@ export interface CancelListingResponse {
 // ─── Mappers ───────────────────────────────────────────────────────────────────
 
 function mapListingStatus(raw: string): ListingStatus {
-  const map: Record<string, ListingStatus> = {
+  const statusMap: Record<string, ListingStatus> = {
     active: 'active',
     fully_sold: 'fully_sold',
     completed: 'completed',
     cancelled: 'cancelled',
     pending: 'pending',
   };
-  return map[raw?.toLowerCase()] ?? 'pending';
+  return statusMap[raw?.toLowerCase()] ?? 'pending';
 }
 
 function formatListingDate(iso: string): string {
   try {
     const d = new Date(iso);
-    return d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })
-      + ' ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    return (
+      d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) +
+      ' ' +
+      d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+    );
   } catch {
     return iso;
   }
@@ -177,13 +169,13 @@ function formatListingDate(iso: string): string {
 export function mapApiListing(api: ApiListing, currentUserId?: string): MarketListing {
   const listedFcc = api.listedFcc ?? 0;
   const soldFcc = api.soldFcc ?? 0;
-  const remainingFcc = api.remainingFcc ?? (listedFcc - soldFcc);
-  const price = api.priceInAedz ?? 0;
+  const remainingFcc = api.remainingFcc ?? listedFcc - soldFcc;
+  const price = api.fccPricePerAedz ?? 0;
   const totalValue = api.totalValue ?? listedFcc * price;
 
   return {
-    id: api.listingId,
-    listingId: api.listingId,
+    id: api.id,
+    listingId: api.id,
     fccAmount: listedFcc,
     floorFccBid: listedFcc,
     listedFcc,
@@ -206,13 +198,12 @@ function mapPlatformStats(data: ApiPlatformStatsResponse['data']): PlatformStats
   };
 }
 
-
 function mapMarketDepth(data: ApiDepthOrder[]): MarketDepth {
   return {
     buyOrders: (data ?? []).map(o => ({
       fccAmount: o.fccAmount,
       price: o.priceInAedz,
-      date: formatListingDate(o.dateTime),
+      date: formatListingDate(o.timeStamp),
       totalValue: o.totalValue,
     })),
     sellOrders: [],
@@ -235,7 +226,7 @@ export async function createListing(
   return res.data;
 }
 
-export async function fetchAllListings(params: {
+export async function fetchMyListings(params: {
   page?: number;
   limit?: number;
   status?: string;
@@ -256,6 +247,9 @@ export async function fetchAllListings(params: {
     total: res.pagination?.total ?? res.data?.length ?? 0,
   };
 }
+
+// Keep the old export name as an alias so existing callers don't break.
+export const fetchAllListings = fetchMyListings;
 
 export async function fetchUserActivity(
   accessToken: string,
@@ -303,10 +297,10 @@ export async function editListing(
   accessToken: string,
   apiUrl: string,
 ): Promise<void> {
-  await apiFetch(
+  await apiFetch<unknown>(
     `http://${apiUrl}:3000/api/v1/marketplace/listings/${listingId}`,
     accessToken,
-    { method: 'PATCH', body: JSON.stringify(payload) },
+    { method: 'PUT', body: JSON.stringify(payload) },
   );
 }
 
@@ -332,5 +326,5 @@ export async function fetchListingDetail(
     `http://${apiUrl}:3000/api/v1/marketplace/listings/${listingId}`,
     accessToken,
   );
-  return res.detail;
+  return res.data;   // was res.detail — key is "data"
 }
