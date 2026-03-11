@@ -1,5 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
-import { WagmiProvider, createConfig, http, useAccount, useConnect, useDisconnect, useSwitchChain, useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
+import {
+  WagmiProvider, createConfig, http,
+  useAccount, useConnect, useDisconnect, useSwitchChain,
+  useReadContract, useWriteContract, useWaitForTransactionReceipt,
+} from 'wagmi';
 import { baseSepolia } from 'wagmi/chains';
 import { injected, walletConnect } from 'wagmi/connectors';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -9,541 +13,376 @@ import LoginPage from './LoginPage';
 import TwoFactorPage from './TwoFactorPage';
 import Dashboard from './Dashboard';
 import { utils } from 'ethers';
-import { FUTURE_CITY_API_URL } from '../constants/config';
+import { FUTURE_CITY_AEDZ_POOL_CONTRACT_ADDRESS, FUTURE_CITY_AEDZ_CONTRACT_ADDRESS, FUTURE_CITY_API_URL, FUTURE_CITY_WALLET_CONNECT_PROJECT_ID } from '../constants/config';
+import { isTokenValid } from './utils/token';
 
-const AEDZ_CONTRACT_ADDRESS = '0xee6a1a4360aA0101cCC6C2d4671a79c3DF778E56';
-const POOL_CONTRACT_ADDRESS = '0xC9d5040aAdf39C4ef71Ab32F9913cE21e70c6D2C';
-
-
+const AEDZ_CONTRACT_ADDRESS = FUTURE_CITY_AEDZ_CONTRACT_ADDRESS!;
+const POOL_CONTRACT_ADDRESS  = FUTURE_CITY_AEDZ_POOL_CONTRACT_ADDRESS!;
+const USER_STORAGE_KEY = 'futurecity_user';           // Key for localStorage
 const AEDZ_ABI = [
   {
     name: 'balanceOf',
     type: 'function',
     stateMutability: 'view',
-    inputs: [{ name: 'account', type: 'address' }],
+    inputs:  [{ name: 'account', type: 'address' }],
     outputs: [{ name: '', type: 'uint256' }],
   },
   {
     name: 'decimals',
     type: 'function',
     stateMutability: 'view',
-    inputs: [],
+    inputs:  [],
     outputs: [{ name: '', type: 'uint8' }],
-  },
-  {
-    name: 'transfer',
-    type: 'function',
-    stateMutability: 'nonpayable',
-    inputs: [
-      { name: 'to', type: 'address' },
-      { name: 'amount', type: 'uint256' },
-    ],
-    outputs: [{ name: '', type: 'bool' }],
   },
   {
     name: 'approve',
     type: 'function',
     stateMutability: 'nonpayable',
-    inputs: [
-      { name: 'spender', type: 'address' },
-      { name: 'amount', type: 'uint256' },
-    ],
+    inputs:  [{ name: 'spender', type: 'address' }, { name: 'amount', type: 'uint256' }],
     outputs: [{ name: '', type: 'bool' }],
   },
 ] as const;
 
-// Wagmi configuration
+const POOL_ABI = [
+  {
+    name: 'deposit',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs:  [{ name: 'uuid', type: 'bytes32' }, { name: 'amount', type: 'uint256' }],
+    outputs: [],
+  },
+] as const;
+
 const config = createConfig({
   chains: [baseSepolia],
   connectors: [
     injected(),
-    walletConnect({
-      projectId: '010be9dddbaa8ce27d4572c201a51e012',
-    }),
+    walletConnect({ projectId: FUTURE_CITY_WALLET_CONNECT_PROJECT_ID }),
   ],
-  transports: {
-    [baseSepolia.id]: http(),
-  },
+  transports: { [baseSepolia.id]: http() },
 });
 
 const queryClient = new QueryClient();
 
+// ─────────────────────────────────────────────────────────────────────────────
+
 function AppContent() {
-  const [authState, setAuthState] = useState('login');
-  const [user, setUser] = useState<any>(null);
-  const [balances, setBalances] = useState({
-    wallet: '0',
-    AEDZ: '0',
-    fcv: '0',
-    fcc: '0',
-  });
-  const [addresses, setAddresses] = useState({
-    fcvAtaAddress: '',
-    fccAtaAddress: '',
-  });
-  const [pendingTx, setPendingTx] = useState<{
-    type: 'approve' | 'deposit' | null;
-    amount: string;
-  }>({ type: null, amount: '0' });
+  const [authState, setAuthState] = useState<'login' | '2fa' | 'authenticated'>('login');
+  const [user, setUser]           = useState<any>(null);
+  const [balances, setBalances]   = useState({ wallet: '0', AEDZ: '0', fcv: '0', fcc: '0' });
+  const [addresses, setAddresses] = useState({ fcvAtaAddress: '', fccAtaAddress: '' });
+  const [pendingTx, setPendingTx] = useState<{ type: 'approve' | 'deposit' | null; amount: string }>({ type: null, amount: '0' });
 
   const wsRef = useRef<WebSocket | null>(null);
 
-  // Wagmi hooks
-  const { address, isConnected } = useAccount();
-  const { connect, connectors } = useConnect();
-  const { disconnect } = useDisconnect();
-  const { switchChain } = useSwitchChain();
+  // ── Wagmi hooks ────────────────────────────────────────────────────────────
+  const { address, isConnected }                                      = useAccount();
+  const { connect, connectors }                                       = useConnect();
+  const { disconnect }                                                 = useDisconnect();
+  const { switchChain }                                               = useSwitchChain();
   const { writeContract, data: hash, isPending, error: writeError, reset } = useWriteContract();
-  const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({ hash });
+  const { isLoading: isConfirming, isSuccess: isConfirmed }           = useWaitForTransactionReceipt({ hash });
 
-  // Read AEDZ balance
   const { data: AEDZBalance, refetch: refetchAEDZBalance } = useReadContract({
     address: AEDZ_CONTRACT_ADDRESS,
-    abi: AEDZ_ABI,
+    abi:     AEDZ_ABI,
     functionName: 'balanceOf',
-    args: address ? [address] : undefined,
+    args:    address ? [address] : undefined,
     chainId: baseSepolia.id,
   });
 
   const { data: AEDZDecimals } = useReadContract({
     address: AEDZ_CONTRACT_ADDRESS,
-    abi: AEDZ_ABI,
+    abi:     AEDZ_ABI,
     functionName: 'decimals',
     chainId: baseSepolia.id,
   });
-
-  // Pool contract ABI (deposit function)
-  const POOL_ABI = [
-    {
-      name: 'deposit',
-      type: 'function',
-      stateMutability: 'nonpayable',
-      inputs: [
-        { name: 'uuid', type: 'bytes32' },
-        { name: 'amount', type: 'uint256' },
-
-      ],
-      outputs: [],
-    },
-  ] as const;
-
-  // WebSocket connection
+  // ── Restore session from localStorage on mount ─────────────────────────────
+  useEffect(() => {
+    const storedUser = localStorage.getItem(USER_STORAGE_KEY);
+    if (storedUser) {
+      try {
+        const userData = JSON.parse(storedUser);
+        // Validate token expiration
+        if (userData.accessToken && isTokenValid(userData.accessToken)) {
+          setUser(userData);
+          setAuthState('authenticated');
+        } else {
+          // Token expired or missing → clear storage
+          localStorage.removeItem(USER_STORAGE_KEY);
+        }
+      } catch {
+        localStorage.removeItem(USER_STORAGE_KEY);
+      }
+    }
+  }, []);
+  // ── WebSocket ──────────────────────────────────────────────────────────────
   const connectWebSocket = () => {
     if (!user?.accessToken) return;
-
     const ws = new WebSocket(`ws://${FUTURE_CITY_API_URL}:3000/ws?token=${user.accessToken}`);
-
-    ws.onopen = () => {
-      console.log('WebSocket connected');
-    };
-
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-
         if (data.type === 'deposit_success' || data.message === 'deposit success') {
-          toast.success('Deposit processed successfully! Your FCV balance has been updated.');
+          toast.success('Deposit processed! FCV balance updated.');
           fetchBalances();
         }
-      } catch (error) {
-        console.error('WebSocket message parse error:', error);
-      }
+      } catch { /* ignore */ }
     };
-
-    ws.onerror = (error) => {
-      console.error('WebSocket error:', error);
-    };
-
     ws.onclose = () => {
-      console.log('WebSocket disconnected');
-      // Reconnect after 3 seconds
-      setTimeout(() => {
-        if (user?.accessToken) {
-          connectWebSocket();
-        }
-      }, 3000);
+      setTimeout(() => { if (user?.accessToken) connectWebSocket(); }, 3000);
     };
-
     wsRef.current = ws;
   };
 
-  // Disconnect WebSocket
   const disconnectWebSocket = () => {
-    if (wsRef.current) {
-      wsRef.current.close();
-      wsRef.current = null;
-    }
+    wsRef.current?.close();
+    wsRef.current = null;
   };
 
-  // Handle login
+  // ── Auth ───────────────────────────────────────────────────────────────────
   const handleLogin = async (credentials: any) => {
     try {
-      const response = await fetch(`http://${FUTURE_CITY_API_URL}:3000/api/v1/auth/login`, {
+      const res  = await fetch(`http://${FUTURE_CITY_API_URL}:3000/api/v1/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(credentials),
       });
-
-      const data = await response.json();
+      const data = await res.json();
 
       if (data.requires2FA) {
         setUser({ ...credentials, tempToken: data.accessToken });
         setAuthState('2fa');
         toast.success('Please enter your 2FA code');
       } else if (data.success) {
+        // Save user data to localStorage
+        localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(data.data));
         setUser(data.data);
         setAuthState('authenticated');
         toast.success('Login successful!');
-        initializeFCM(data.data.accessToken);
       } else {
         toast.error(data.message || 'Login failed');
       }
-    } catch (error: any) {
-      toast.error('Login failed: ' + error.message);
+    } catch (err: any) {
+      toast.error('Login failed: ' + err.message);
     }
   };
 
-  // Handle 2FA verification
   const handle2FA = async (code: any) => {
     try {
-      const response = await fetch(`http://${FUTURE_CITY_API_URL}:3000/api/v1/auth/verify-2fa`, {
+      const res  = await fetch(`http://${FUTURE_CITY_API_URL}:3000/api/v1/auth/verify-2fa`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tempToken: user?.tempToken,
-          code: code,
-        }),
+        body: JSON.stringify({ tempToken: user?.tempToken, code }),
       });
-
-      const data = await response.json();
-
+      const data = await res.json();
       if (data.success) {
+         // Save user data to localStorage
+        localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(data.data));
         setUser(data.data);
         setAuthState('authenticated');
-        toast.success('2FA verified successfully!');
-        initializeFCM(data.data.accessToken);
+        toast.success('2FA verified!');
       } else {
         toast.error(data.message || '2FA verification failed');
       }
-    } catch (error: any) {
-      toast.error('2FA verification failed: ' + error.message);
+    } catch (err: any) {
+      toast.error('2FA failed: ' + err.message);
     }
   };
 
-  // Initialize Firebase Cloud Messaging
-  const initializeFCM = (userToken: any) => {
-    console.log('Initializing FCM for user:', userToken);
-
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.addEventListener('message', (event) => {
-        if (event.data.type === 'BALANCE_UPDATE') {
-          fetchBalances();
-        }
-      });
-    }
-  };
-
-  // Connect wallet
+  // ── Wallet ─────────────────────────────────────────────────────────────────
   const connectWallet = async () => {
     try {
-      const connector = connectors[0];
-      connect({ connector, chainId: baseSepolia.id });
-
-      setTimeout(() => {
-        if (isConnected) {
-          switchChain({ chainId: baseSepolia.id });
-        }
-      }, 1000);
-
+      connect({ connector: connectors[0], chainId: baseSepolia.id });
+      setTimeout(() => { if (isConnected) switchChain({ chainId: baseSepolia.id }); }, 1000);
       toast.success('Wallet connected!');
-    } catch (error: any) {
-      toast.error('Failed to connect wallet: ' + error.message);
+    } catch (err: any) {
+      toast.error('Failed to connect wallet: ' + err.message);
     }
   };
 
-  // Check AEDZ balance
+  // ── AEDZ balance watch ─────────────────────────────────────────────────────
   useEffect(() => {
     if (AEDZBalance && AEDZDecimals) {
-      const formattedBalance = formatUnits(AEDZBalance, AEDZDecimals);
-      setBalances(prev => ({ ...prev, wallet: formattedBalance }));
-
-      if (parseFloat(formattedBalance) === 0) {
-        toast.error("You don't have AEDZ. Please buy some first!", {
-          duration: 5000,
-        });
-      }
+      const formatted = formatUnits(AEDZBalance, AEDZDecimals);
+      setBalances((prev) => ({ ...prev, wallet: formatted }));
+      if (parseFloat(formatted) === 0) toast.error("You don't have AEDZ. Please buy some first!", { duration: 5000 });
     }
   }, [AEDZBalance, AEDZDecimals]);
 
-  // Handle transaction errors (including user rejection)
+  // ── TX error handling ──────────────────────────────────────────────────────
   useEffect(() => {
-    if (writeError) {
-      toast.dismiss('tx-confirming');
-      toast.dismiss('approve-request');
-
-      const errorMessage = writeError.message || '';
-
-      // Check if user rejected the transaction
-      if (errorMessage.includes('User rejected') ||
-        errorMessage.includes('User denied') ||
-        errorMessage.includes('rejected') ||
-        errorMessage.includes('denied')) {
-        toast.error('Transaction cancelled by user', { id: 'tx-cancelled' });
-      } else {
-        toast.error(`Transaction failed: ${errorMessage}`, { id: 'tx-error' });
-      }
-
-      // Reset pending transaction state
-      setPendingTx({ type: null, amount: '0' });
-
-      // Reset the write contract hook
-      reset();
+    if (!writeError) return;
+    toast.dismiss('tx-confirming');
+    toast.dismiss('approve-request');
+    const msg = writeError.message ?? '';
+    if (msg.includes('rejected') || msg.includes('denied')) {
+      toast.error('Transaction cancelled by user', { id: 'tx-cancelled' });
+    } else {
+      toast.error(`Transaction failed: ${msg}`, { id: 'tx-error' });
     }
+    setPendingTx({ type: null, amount: '0' });
+    reset();
   }, [writeError, reset]);
 
-  // Monitor transaction confirmations
+  // ── TX confirmation watch ──────────────────────────────────────────────────
   useEffect(() => {
     if (isConfirming) {
-      const txType = pendingTx.type === 'approve' ? 'Approval' : 'Deposit';
-      toast.loading(`${txType} in progress...`, { id: 'tx-confirming' });
+      toast.loading(`${pendingTx.type === 'approve' ? 'Approval' : 'Deposit'} in progress…`, { id: 'tx-confirming' });
     }
-
     if (isConfirmed && pendingTx.type && hash) {
       toast.dismiss('tx-confirming');
-
       if (pendingTx.type === 'approve') {
-        toast.success('Approval confirmed! Now depositing...', { id: 'approve-success' });
-        // Automatically trigger deposit after approval
+        toast.success('Approval confirmed! Now depositing…', { id: 'approve-success' });
         executeDeposit(pendingTx.amount);
       } else if (pendingTx.type === 'deposit') {
         toast.success('Deposit confirmed on blockchain!', { id: 'deposit-success' });
-        // Call convert API with the transaction hash
         convertToFCV(hash);
         setPendingTx({ type: null, amount: '0' });
       }
     }
   }, [isConfirming, isConfirmed, pendingTx, hash]);
 
-  // Execute deposit (called after approval is confirmed)
+  // ── Blockchain actions ─────────────────────────────────────────────────────
   const executeDeposit = async (amount: string) => {
     try {
       if (!AEDZDecimals) throw new Error('Could not fetch AEDZ decimals');
-
-      const amountInWei = parseUnits(amount, AEDZDecimals);
-
+      const amountInWei  = parseUnits(amount, AEDZDecimals);
+      const bytes32User  = utils.hexZeroPad('0x' + user.userId.replace(/-/g, ''), 32);
       setPendingTx({ type: 'deposit', amount });
-     // Convert UUID to bytes32
-const bytes32User = utils.hexZeroPad(
-  '0x' + user.userId.replace(/-/g, ''), 
-  32
-);
       writeContract({
         address: POOL_CONTRACT_ADDRESS,
-        abi: POOL_ABI,
+        abi:     POOL_ABI,
         functionName: 'deposit',
-        //@ts-ignore
-        args: [bytes32User, amountInWei],
+        // @ts-ignore
+        args:    [bytes32User, amountInWei],
         chainId: baseSepolia.id,
       });
-    } catch (error: any) {
-      toast.error('Deposit failed: ' + error.message);
+    } catch (err: any) {
+      toast.error('Deposit failed: ' + err.message);
       setPendingTx({ type: null, amount: '0' });
     }
   };
 
-  // Convert AEDZ to FCV (deposit to contract with approve + deposit flow)
   const depositAndConvert = async (amount: string) => {
-    if (!address) {
-      toast.error('Please connect your wallet first');
-      return;
-    }
-
-    if (!amount || parseFloat(amount) <= 0) {
-      toast.error('Please enter a valid amount');
-      return;
-    }
-
+    if (!address)                         { toast.error('Connect your wallet first'); return; }
+    if (!amount || parseFloat(amount) <= 0) { toast.error('Enter a valid amount');       return; }
     try {
       if (!AEDZDecimals) throw new Error('Could not fetch AEDZ decimals');
-
       const amountInWei = parseUnits(amount, AEDZDecimals);
-
-      // Check if user has enough balance
-      if (AEDZBalance && amountInWei > AEDZBalance) {
-        toast.error('Insufficient AEDZ balance');
-        return;
-      }
-
-      // Step 1: Approve
-      toast.loading('Please approve AEDZ spending in your wallet...', { id: 'approve-request' });
-
+      if (AEDZBalance && amountInWei > AEDZBalance) { toast.error('Insufficient AEDZ balance'); return; }
+      toast.loading('Please approve AEDZ spending in your wallet…', { id: 'approve-request' });
       setPendingTx({ type: 'approve', amount });
-
       writeContract({
         address: AEDZ_CONTRACT_ADDRESS,
-        abi: AEDZ_ABI,
+        abi:     AEDZ_ABI,
         functionName: 'approve',
-        args: [POOL_CONTRACT_ADDRESS, amountInWei],
+        args:    [POOL_CONTRACT_ADDRESS, amountInWei],
         chainId: baseSepolia.id,
       });
-
       toast.dismiss('approve-request');
-
-    } catch (error: any) {
-      toast.error('Transaction failed: ' + error.message);
+    } catch (err: any) {
+      toast.error('Transaction failed: ' + err.message);
       setPendingTx({ type: null, amount: '0' });
-      throw error;
+      throw err;
     }
   };
 
-  // Convert AEDZ to FCV via API (called after deposit confirmation)
   const convertToFCV = async (txHash: string) => {
     try {
-      toast.loading('Processing conversion...', { id: 'converting' });
-
-      const response = await fetch(`http://${FUTURE_CITY_API_URL}:3000/api/v1/wallet/initiate-deposit`, {
+      toast.loading('Processing conversion…', { id: 'converting' });
+      const res  = await fetch(`http://${FUTURE_CITY_API_URL}:3000/api/v1/wallet/initiate-deposit`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${user?.accessToken}`,
-        },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${user?.accessToken}` },
         body: JSON.stringify({ tx_hash: txHash }),
       });
-
-      const data = await response.json();
+      const data = await res.json();
       toast.dismiss('converting');
-
       if (data.success) {
-        toast.success(data.message || 'Conversion initiated! You will receive a notification when complete.', {
-          duration: 5000,
-        });
-
-        // Connect to WebSocket to listen for deposit completion
+        toast.success(data.message || 'Conversion initiated! Notification will follow.', { duration: 5000 });
         connectWebSocket();
-
-        // Also refetch balances after a short delay
-        setTimeout(() => {
-          refetchAEDZBalance();
-          fetchBalances();
-        }, 3000);
+        setTimeout(() => { refetchAEDZBalance(); fetchBalances(); }, 3000);
       } else {
         toast.error(data.message || 'Conversion failed');
       }
-    } catch (error: any) {
+    } catch (err: any) {
       toast.dismiss('converting');
-      toast.error('Conversion failed: ' + error.message);
+      toast.error('Conversion failed: ' + err.message);
     }
   };
 
-  // Transfer FCV to another user
+  // ── API actions ────────────────────────────────────────────────────────────
   const transferFCV = async (recipientAddress: string, amount: string) => {
     try {
-      toast.loading('Transferring FCV...', { id: 'transfer-fcv' });
-
-      const response = await fetch(`http://${FUTURE_CITY_API_URL}:3000/api/v1/wallet/transfer`, {
+      toast.loading('Transferring FCV…', { id: 'transfer-fcv' });
+      const res  = await fetch(`http://${FUTURE_CITY_API_URL}:3000/api/v1/wallet/send-fcv`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${user?.accessToken}`,
-        },
-        body: JSON.stringify({
-          recipientAddress,
-          amount: parseFloat(amount),
-        }),
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${user?.accessToken}` },
+        body: JSON.stringify({ recipient_address: recipientAddress, amount, currency: 'FCV', pin: '1234' }),
       });
-
-      const data = await response.json();
+      const data = await res.json();
       toast.dismiss('transfer-fcv');
-
-      if (data.success) {
-        toast.success(data.message || 'Transfer successful!');
-        fetchBalances();
-      } else {
-        toast.error(data.message || 'Transfer failed');
-      }
-    } catch (error: any) {
+      if (data.success) { toast.success(data.message || 'Transfer successful!'); fetchBalances(); }
+      else toast.error(data.message || 'Transfer failed');
+    } catch (err: any) {
       toast.dismiss('transfer-fcv');
-      toast.error('Transfer failed: ' + error.message);
+      toast.error('Transfer failed: ' + err.message);
     }
   };
 
-  // Withdraw FCV to AEDZ
   const withdrawFCV = async (amount: string) => {
     try {
-      toast.loading('Processing withdrawal...', { id: 'withdraw-fcv' });
-
-      const response = await fetch( `http://${FUTURE_CITY_API_URL}:3000/api/v1/wallet/initiate-withdrawal`, {
+      toast.loading('Processing withdrawal…', { id: 'withdraw-fcv' });
+      const res  = await fetch(`http://${FUTURE_CITY_API_URL}:3000/api/v1/wallet/initiate-withdrawal`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${user?.accessToken}`,
-        },
-        body: JSON.stringify({
-          "amount": amount.toString(),
-          "wallet_address": address!!.toString(),
-        }),
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${user?.accessToken}` },
+        body: JSON.stringify({ amount: amount.toString(), wallet_address: address!.toString() }),
       });
-
-      const data = await response.json();
+      const data = await res.json();
       toast.dismiss('withdraw-fcv');
-
-      if (data.success) {
-        toast.success(data.message || 'Withdrawal successful!');
-        fetchBalances();
-        refetchAEDZBalance();
-      } else {
-        toast.error(data.message || 'Withdrawal failed');
-      }
-    } catch (error: any) {
+      if (data.success) { toast.success(data.message || 'Withdrawal successful!'); fetchBalances(); refetchAEDZBalance(); }
+      else toast.error(data.message || 'Withdrawal failed');
+    } catch (err: any) {
       toast.dismiss('withdraw-fcv');
-      toast.error('Withdrawal failed: ' + error.message);
+      toast.error('Withdrawal failed: ' + err.message);
     }
   };
 
-  // Fetch all balances from backend
   const fetchBalances = async () => {
     try {
-      const response = await fetch('http://FUTURE_CITY_URL:3000/api/v1/wallet/balance', {
-        headers: {
-          'Authorization': `Bearer ${user?.accessToken}`,
-        },
+      const res    = await fetch(`http://${FUTURE_CITY_API_URL}:3000/api/v1/wallet/balance`, {
+        headers: { Authorization: `Bearer ${user?.accessToken}` },
       });
-
-      const result = await response.json();
-
+      const result = await res.json();
       if (result.success && result.data) {
-        setBalances(prev => ({
+        setBalances((prev) => ({
           ...prev,
           AEDZ: result.data.totalInvestmentAED || '0',
-          fcv: result.data.fcvBalance || '0',
-          fcc: result.data.fccBalance || '0',
+          fcv:  result.data.fcvBalance          || '0',
+          fcc:  result.data.fccBalance           || '0',
         }));
         setAddresses({
           fcvAtaAddress: result.data.fcvAtaAddress || '',
           fccAtaAddress: result.data.fccAtaAddress || '',
         });
       }
-    } catch (error: any) {
-      console.error('Failed to fetch balances:', error);
+    } catch (err) {
+      console.error('Failed to fetch balances:', err);
     }
   };
 
-  // Fetch balances when authenticated
+  // ── Lifecycle ──────────────────────────────────────────────────────────────
   useEffect(() => {
     if (authState === 'authenticated' && user) {
       fetchBalances();
       connectWebSocket();
-
       const interval = setInterval(fetchBalances, 30000);
-      return () => {
-        clearInterval(interval);
-        disconnectWebSocket();
-      };
+      return () => { clearInterval(interval); disconnectWebSocket(); };
     }
   }, [authState, user]);
 
-  // Logout
-  const handleLogout = () => {
+ const handleLogout = () => {
+    localStorage.removeItem(USER_STORAGE_KEY);
     setAuthState('login');
     setUser(null);
     disconnect();
@@ -554,22 +393,14 @@ const bytes32User = utils.hexZeroPad(
     toast.success('Logged out successfully');
   };
 
+  // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen animated-bg">
       <Toaster
         position="top-right"
         toastOptions={{
-          style: {
-            background: '#131827',
-            color: '#fff',
-            border: '1px solid rgba(255, 255, 255, 0.1)',
-          },
-          success: {
-            iconTheme: {
-              primary: '#00f0ff',
-              secondary: '#131827',
-            },
-          },
+          style: { background: '#131827', color: '#fff', border: '1px solid rgba(255,255,255,0.1)' },
+          success: { iconTheme: { primary: '#00f0ff', secondary: '#131827' } },
         }}
       />
 
@@ -584,6 +415,7 @@ const bytes32User = utils.hexZeroPad(
           isConnected={isConnected}
           balances={balances}
           addresses={addresses}
+          apiUrl={FUTURE_CITY_API_URL}  
           onConnectWallet={connectWallet}
           onDepositAndConvert={depositAndConvert}
           onTransferFCV={transferFCV}
@@ -595,6 +427,8 @@ const bytes32User = utils.hexZeroPad(
     </div>
   );
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 export function FApp() {
   return (
