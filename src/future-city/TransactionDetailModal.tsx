@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { X, Copy, Check } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { Transaction } from './types';
+import type { Transaction } from './types';
 import { getModalIconGradient, getModalIconEmoji, getStatusBadge } from './utils/ui';
 
 interface TransactionDetailModalProps {

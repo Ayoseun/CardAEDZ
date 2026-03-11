@@ -1,4 +1,4 @@
-import { ApiTransaction, Transaction } from '../types';
+import type { ApiTransaction, Transaction } from '../types';
 
 export const DEBIT_TYPES = ['CONVERT_FROM_FCV', 'SEND_FCV', 'WITHDRAW_FCV', 'PROPERTY_INVESTMENT', 'FCC_LISTED'];
 

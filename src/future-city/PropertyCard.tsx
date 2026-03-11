@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { MapPin, Heart, Bed, Bath, Maximize, ChevronLeft, ChevronRight, CheckCircle } from 'lucide-react';
-import { Property } from './types';
+import type { Property } from './types';
 
 interface PropertyCardProps {
   property: Property;
@@ -43,6 +43,7 @@ export default function PropertyCard({ property, onClick }: PropertyCardProps) {
       {/* ── Carousel ─────────────────────────────────────────────────────────── */}
       <div className="relative h-44 overflow-hidden bg-gray-100 flex-shrink-0">
         <img
+           //@ts-ignore
           src={images[imgIdx].url}
           alt={property.name}
           className="w-full h-full object-cover"

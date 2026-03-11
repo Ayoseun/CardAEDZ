@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Search, SlidersHorizontal, RefreshCw, ChevronLeft, ChevronRight, AlertCircle, Building2 } from 'lucide-react';
-import { Property, PropertyStatus } from './types';
+import type { Property, PropertyStatus } from './types';
 import PropertyCard from './PropertyCard';
 import PropertyDetailPage from './PropertyDetailPage';
 import CheckoutPage from './CheckoutPage';

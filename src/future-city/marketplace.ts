@@ -1,76 +1,7 @@
-// ─── Domain types (mirrored from Go domain/marketplace.go) ───────────────────
-
-export type ListingStatus = 'active' | 'fully_sold' | 'completed' | 'cancelled' | 'pending';
-
-export interface MarketListing {
-  id: string;
-  listingId: string;
-  fccAmount: number;
-  floorFccBid: number;
-  listedFcc: number;
-  price: number;
-  dateTime: string;
-  status: ListingStatus;
-  totalValue: number;
-  remaining: number;
-  isOwn: boolean;
-}
-
-export interface UserFccActivity {
-  fccBalance: number;
-  totalFccsold: number;    // lowercase 's' confirmed from API
-  earningsAedz: number;
-  activeListings: number;
-  totalFccListed: number;
-  rewardTokens: number;
-}
-
-/** Mirrors Go PlatformStatsSummary */
-export interface PlatformStats {
-  totalFccBoughtByCity: number;
-  totalAedzPaidToUsers: number;
-  activeListingsCount: number;
-  avgBuybackPrice30d: number;
-  updatedAt: string;
-}
-
-export interface MarketDepthOrder {
-  fccAmount: number;
-  price: number;
-  date: string;
-  totalValue: number;
-}
-
-export interface MarketDepth {
-  buyOrders: MarketDepthOrder[];
-  sellOrders: MarketDepthOrder[];
-}
-
-/** Mirrors Go FCCTimelineEntrySummary */
-export interface FCCTimelineEntry {
-  eventType: string;
-  label: string;
-  detail: string;
-  occurredAt: string;
-}
-
-/** Mirrors Go FCCListingDetailSummary */
-export interface FCCListingDetail {
-  listingId: string;
-  listedFcc: number;
-  soldFcc: number;
-  remainingFcc: number;
-  priceInAedz: number;
-  totalValue: number;
-  totalEarned: number;
-  status: string;
-  listedAt: string;
-  cancelledAt?: string;
-  saleProgressInPercentage: number;
-  timeline: FCCTimelineEntry[];
-}
 
 // ─── Base fetcher ──────────────────────────────────────────────────────────────
+
+import type { FCCListingDetail, ListingStatus, MarketDepth, MarketListing, PlatformStats, UserFccActivity } from "./types";
 
 async function apiFetch<T>(
   url: string,

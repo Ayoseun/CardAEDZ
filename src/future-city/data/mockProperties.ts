@@ -1,4 +1,5 @@
-import { Property, Investment } from '../types';
+import type { Investment, Property } from "../types";
+
 
 export const MOCK_PROPERTIES: Property[] = [
   {
@@ -31,7 +32,8 @@ export const MOCK_PROPERTIES: Property[] = [
     description: 'Premium two-bedroom apartment in Executive Residences 1, Dubai Marina. Fully furnished and currently rented, offering immediate rental income.',
     highlights: ['Sea View', 'Fully Furnished', 'Currently Rented', 'Smart Home', 'Concierge Service'],
     latitude: 25.0801,
-   longitude: 55.1339,
+    longitude: 55.1339,
+    documents: []
   },
   {
     id: 'prop-002',
@@ -62,7 +64,8 @@ export const MOCK_PROPERTIES: Property[] = [
     description: 'Luxury apartment in the heart of Downtown Dubai with stunning Burj Khalifa views. Currently vacant, ideal for investors seeking capital appreciation.',
     highlights: ['Burj Khalifa View', 'Premium Finishes', 'Central Location', 'Gym & Pool'],
     latitude: 25.1972,
-   longitude: 55.2744,
+    longitude: 55.2744,
+    documents: []
   },
   {
     id: 'prop-003',
@@ -92,7 +95,8 @@ export const MOCK_PROPERTIES: Property[] = [
     description: 'Stunning villa on the iconic Palm Jumeirah. Not yet open for investment — register your interest to be notified at launch.',
     highlights: ['Private Beach', 'Infinity Pool', 'Sea View', 'Smart Home'],
     latitude: 25.1124,
-   longitude: 55.1390,
+    longitude: 55.1390,
+    documents: []
   },
   {
     id: 'prop-004',
@@ -123,6 +127,7 @@ export const MOCK_PROPERTIES: Property[] = [
     highlights: ['Private Pool', 'Beach Access', 'Sea View'],
     latitude: 25.1200,
     longitude: 55.1400,
+    documents: []
   },
   {
     id: 'prop-005',
@@ -153,7 +158,8 @@ export const MOCK_PROPERTIES: Property[] = [
     description: 'High-floor luxury apartment with panoramic views in Downtown Dubai.',
     highlights: ['Panoramic Views', 'High Floor', 'Fully Equipped Gym', 'Valet Parking'],
     latitude: 25.1980,
-   longitude: 55.2750,
+    longitude: 55.2750,
+    documents: []
   },
   {
     id: 'prop-006',
@@ -184,7 +190,8 @@ export const MOCK_PROPERTIES: Property[] = [
     description: 'Fully funded Grade-A office complex in Business Bay. Fully tenanted with long-term lease agreements.',
     highlights: ['Fully Tenanted', 'Grade-A Office', 'Canal View', 'LEED Certified'],
     latitude: 25.1865,
-   longitude: 55.2565,
+    longitude: 55.2565,
+    documents: []
   },
 ];
 

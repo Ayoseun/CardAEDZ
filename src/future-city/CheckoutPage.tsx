@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ArrowLeft, CheckCircle, Shield, Building2, AlertTriangle, Loader } from 'lucide-react';
-import { Property } from './types';
+import type { Property } from './types';
 import toast from 'react-hot-toast';
 
 interface CheckoutPageProps {
@@ -116,7 +116,7 @@ export default function CheckoutPage({ property, initialTokens, fcvBalance, onBa
             {/* Property summary */}
             <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 flex gap-4">
               <div className="w-20 h-20 rounded-xl overflow-hidden flex-shrink-0 bg-gray-100">
-                <img src={property.imageUrl} alt={property.name} className="w-full h-full object-cover" />
+                <img src={property.cover_image} alt={property.name} className="w-full h-full object-cover" />
               </div>
               <div className="flex-1 min-w-0">
                 <h3 className="font-bold text-gray-900 text-sm leading-tight">{property.name}</h3>

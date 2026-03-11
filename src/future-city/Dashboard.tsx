@@ -5,7 +5,7 @@ import {
    List,  Eye, ArrowDownToLine,
   LayoutDashboard, Home, BarChart3, Tag,
 } from 'lucide-react';
-import { User, Balances, Addresses, ApiTransaction, Transaction } from './types';
+import type { User, Balances, Addresses, ApiTransaction, Transaction } from './types';
 import { mapApiTransactionToUi } from './utils/transactions';
 import { getTransactionIcon, getIconBgColor, getStatusBadge } from './utils/ui';
 import TransactionDetailModal from './TransactionDetailModal';

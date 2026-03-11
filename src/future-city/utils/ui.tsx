@@ -1,6 +1,7 @@
-import { Transaction } from '../types';
+
 import { RefreshCw, Send, ArrowDownLeft, Gift, Building2, List, X } from 'lucide-react';
 import React from 'react';
+import type { Transaction } from '../types';
 
 export const getTransactionIcon = (type: Transaction['type']) => {
   switch (type) {
